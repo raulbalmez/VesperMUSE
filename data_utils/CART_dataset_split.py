@@ -40,7 +40,7 @@ def copy_and_rename_consistent(rgb_files, thermal_files, seg_files, src_dirs, ds
 # -----------------------------
 # CONFIG
 # -----------------------------
-DATASET_ROOT = "/home/ancuti/expendables/Multeenhancer/data/CART"
+DATASET_ROOT = "/home/ancuti/expendables/VesperMUSE/data/CART"
 COLOR_DIR = os.path.join(DATASET_ROOT, "color")
 THERMAL_DIR = os.path.join(DATASET_ROOT, "thermal8")
 SEG_DIR = os.path.join(DATASET_ROOT, "annotations")

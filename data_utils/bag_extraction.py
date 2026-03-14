@@ -91,5 +91,5 @@ def extract_vivid_bag_raw_stats(bag_path, output_dir):
 # Example usage
 extract_vivid_bag_raw_stats(
     "/home/ancuti/Downloads/outdoor_robust_day1-002.bag",
-    "/home/ancuti/expendables/Multeenhancer/data/VIVID_1/"
+    "/home/ancuti/expendables/VesperMUSE/data/VIVID_1/"
 )

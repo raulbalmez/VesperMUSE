@@ -102,7 +102,7 @@ class ClassWeights:
 
 def main():
 
-    pst900_path = '/home/ancuti/expendables/Multeenhancer/data/PST900_RGBT_Dataset/'
+    pst900_path = '/home/ancuti/expendables/VesperMUSE/data/PST900_RGBT_Dataset/'
 
     weight_path = pst900_path + 'weights.ini'
 

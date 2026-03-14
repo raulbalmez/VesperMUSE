@@ -103,5 +103,5 @@ def compute_mfnet_weights(path, save=True):
 
 if __name__ == "__main__":
     # Example:
-    mfnet_path = "/home/ancuti/expendables/Multeenhancer/data/MFNet/"
+    mfnet_path = "/home/ancuti/expendables/VesperMUSE/data/MFNet/"
     compute_mfnet_weights(mfnet_path, save=True)

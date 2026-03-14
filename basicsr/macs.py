@@ -1,9 +1,9 @@
 import torch
 from torchprofile import profile_macs
-from basicsr.models.archs.RetinexFormer_arch import Multeenhancer_General_Seg
+from basicsr.models.archs.VesperMUSE_arch import VesperMUSE_General_Seg
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = Multeenhancer_General_Seg(n_feat=32).to(device)
+model = VesperMUSE_General_Seg(n_feat=32).to(device)
 input_tensor = torch.randn(1, 4, 256, 256).to(device)
 
 # --- Compute MACs/FLOPs ---
@@ -33,5 +33,5 @@ def summarize_module(module, name="", indent=0, depth=2):
             summarize_module(child, child_name, indent + 4, depth - 1)
 
 print("\n🔍 Module-level parameter breakdown:\n")
-summarize_module(model, "Multeenhancer_General_Seg", depth=3)
+summarize_module(model, "VesperMUSE_General_Seg", depth=3)
 print("=" * 70)

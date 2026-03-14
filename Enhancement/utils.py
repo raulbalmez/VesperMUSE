@@ -1,9 +1,3 @@
-# Retinexformer: One-stage Retinex-based Transformer for Low-light Image Enhancement
-# Yuanhao Cai, Hao Bian, Jing Lin, Haoqian Wang, Radu Timofte, Yulun Zhang
-# International Conference on Computer Vision (ICCV), 2023
-# https://arxiv.org/abs/2303.06705
-# https://github.com/caiyuanhao1998/Retinexformer
-
 import numpy as np
 import os
 import cv2
@@ -12,9 +6,6 @@ from pdb import set_trace as stx
 
 
 def calculate_psnr(img1, img2, border=0):
-    # img1 and img2 have range [0, 255]
-    #img1 = img1.squeeze()
-    #img2 = img2.squeeze()
     if not img1.shape == img2.shape:
         raise ValueError('Input images must have the same dimensions.')
     h, w = img1.shape[:2]
@@ -120,7 +111,6 @@ def visualization(feature, save_path, type='max', colormap=cv2.COLORMAP_JET):
     normed_feat = (feature - feature.min()) / (feature.max() - feature.min())
     normed_feat = (normed_feat * 255).astype('uint8')
     color_feat = cv2.applyColorMap(normed_feat, colormap)
-    # stx()
     cv2.imwrite(save_path, color_feat)
 
 def my_summary(test_model, H = 256, W = 256, C = 3, N = 1):

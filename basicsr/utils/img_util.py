@@ -34,7 +34,7 @@ def img2tensor(imgs, bgr2rgb=True, float32=True):
 
 
 # Enhancement version
-def tensor2img(tensor, rgb2bgr=True, out_type=np.uint8, min_max=(0, 1)):
+def tensor2img_enh(tensor, rgb2bgr=True, out_type=np.uint8, min_max=(0, 1)):
     """Convert torch Tensors into image numpy arrays.
 
     After clamping to [min, max], values will be normalized to [0, 1].
@@ -99,54 +99,54 @@ def tensor2img(tensor, rgb2bgr=True, out_type=np.uint8, min_max=(0, 1)):
     return result
 
 # Raw version (SEG Version)
-# def tensor2img(tensor, rgb2bgr=True):
-#     """Convert torch Tensors into image numpy arrays (raw values, no clamping or type casting).
+def tensor2img_raw(tensor, rgb2bgr=True):
+    """Convert torch Tensors into image numpy arrays (raw values, no clamping or type casting).
 
-#     Args:
-#         tensor (Tensor or list[Tensor]): Accepts:
-#             1) 4D mini-batch Tensor of shape (B x C x H x W);
-#             2) 3D Tensor of shape (C x H x W);
-#             3) 2D Tensor of shape (H x W).
-#         rgb2bgr (bool): Whether to change RGB to BGR order.
+    Args:
+        tensor (Tensor or list[Tensor]): Accepts:
+            1) 4D mini-batch Tensor of shape (B x C x H x W);
+            2) 3D Tensor of shape (C x H x W);
+            3) 2D Tensor of shape (H x W).
+        rgb2bgr (bool): Whether to change RGB to BGR order.
 
-#     Returns:
-#         np.ndarray or list[np.ndarray]: Same dtype as input tensor.
-#     """
-#     if not (torch.is_tensor(tensor) or
-#             (isinstance(tensor, list) and all(torch.is_tensor(t) for t in tensor))):
-#         raise TypeError(f'tensor or list of tensors expected, got {type(tensor)}')
+    Returns:
+        np.ndarray or list[np.ndarray]: Same dtype as input tensor.
+    """
+    if not (torch.is_tensor(tensor) or
+            (isinstance(tensor, list) and all(torch.is_tensor(t) for t in tensor))):
+        raise TypeError(f'tensor or list of tensors expected, got {type(tensor)}')
 
-#     if torch.is_tensor(tensor):
-#         tensor = [tensor]
+    if torch.is_tensor(tensor):
+        tensor = [tensor]
 
-#     result = []
-#     for _tensor in tensor:
-#         _tensor = _tensor.squeeze(0).detach().cpu()  # keep original dtype
+    result = []
+    for _tensor in tensor:
+        _tensor = _tensor.squeeze(0).detach().cpu()  # keep original dtype
 
-#         n_dim = _tensor.dim()
-#         if n_dim == 4:
-#             from torchvision.utils import make_grid
-#             img_np = make_grid(_tensor, nrow=int(math.sqrt(_tensor.size(0))), normalize=False).numpy()
-#             img_np = img_np.transpose(1, 2, 0)
-#             if rgb2bgr:
-#                 import cv2
-#                 img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-#         elif n_dim == 3:
-#             img_np = _tensor.numpy().transpose(1, 2, 0)
-#             if img_np.shape[2] == 1:
-#                 img_np = np.squeeze(img_np, axis=2)
-#             else:
-#                 if rgb2bgr:
-#                     import cv2
-#                     img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-#         elif n_dim == 2:
-#             img_np = _tensor.numpy()
-#         else:
-#             raise TypeError(f'Unsupported tensor dim: {n_dim}')
+        n_dim = _tensor.dim()
+        if n_dim == 4:
+            from torchvision.utils import make_grid
+            img_np = make_grid(_tensor, nrow=int(math.sqrt(_tensor.size(0))), normalize=False).numpy()
+            img_np = img_np.transpose(1, 2, 0)
+            if rgb2bgr:
+                import cv2
+                img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        elif n_dim == 3:
+            img_np = _tensor.numpy().transpose(1, 2, 0)
+            if img_np.shape[2] == 1:
+                img_np = np.squeeze(img_np, axis=2)
+            else:
+                if rgb2bgr:
+                    import cv2
+                    img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        elif n_dim == 2:
+            img_np = _tensor.numpy()
+        else:
+            raise TypeError(f'Unsupported tensor dim: {n_dim}')
 
-#         result.append(img_np)
+        result.append(img_np)
 
-#     return result[0] if len(result) == 1 else result
+    return result[0] if len(result) == 1 else result
 
 
 

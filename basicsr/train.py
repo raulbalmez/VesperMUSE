@@ -191,6 +191,9 @@ def main():
     result = create_train_val_dataloader(opt, logger)
     train_loader, train_sampler, val_loader, total_epochs, total_iters = result
 
+    # set measurements key
+    measurement_key = list(opt["val"]["metrics"].keys())[0]
+
     if resume_state:  # resume training
         check_resume(opt, resume_state['iter'])
         model = create_model(opt)
@@ -200,10 +203,9 @@ def main():
         start_epoch = resume_state['epoch']
         current_iter = resume_state['iter']
         best_metric = resume_state['best_metric']
-        best_psnr = best_metric['psnr']
-        # best_psnr = best_metric['miou']
+        best_measurement = best_metric[measurement_key]
         best_iter = best_metric['iter']
-        logger.info(f'best psnr: {best_psnr} from iteration {best_iter}')
+        logger.info(f'best {measurement_key}: {best_measurement} from iteration {best_iter}')
     else:
         model = create_model(opt)
         start_epoch = 0
@@ -330,14 +332,10 @@ def main():
                 metric_str = f'{current_iter},{current_metric}'
                 logger_metric.info(metric_str)
 
+
                 # log best metric
-                # if best_metric['psnr'] < current_metric:
-                #     best_metric['psnr'] = current_metric
-                #     # save best model
-                #     best_metric['iter'] = current_iter
-                #     model.save_best(best_metric)
-                if best_metric['psnr'] < current_metric:
-                    best_metric['psnr'] = current_metric
+                if best_metric[measurement_key] < current_metric:
+                    best_metric[measurement_key] = current_metric
                     # save best model
                     best_metric['iter'] = current_iter
                     model.save_best(best_metric)
@@ -358,7 +356,7 @@ def main():
                 if tb_logger:
                     tb_logger.add_scalar(  # best iter
                         f'metrics/best_iter', best_metric['iter'], current_iter)
-                    for k, v in opt['val']['metrics'].items():  # best_psnr
+                    for k, v in opt['val']['metrics'].items():
                         tb_logger.add_scalar(
                             f'metrics/best_{k}', best_metric[k], current_iter)
 

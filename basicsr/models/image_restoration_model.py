@@ -8,7 +8,7 @@ import glob
 
 from basicsr.models.archs import define_network
 from basicsr.models.base_model import BaseModel
-from basicsr.utils import get_root_logger, imwrite, tensor2img
+from basicsr.utils import get_root_logger, imwrite, tensor2img_enh, tensor2img_raw
 
 loss_module = importlib.import_module('basicsr.models.losses')
 metric_module = importlib.import_module('basicsr.metrics')
@@ -128,8 +128,14 @@ class ImageCleanModel(BaseModel):
         if train_opt.get('pixel_opt'):
             pixel_type = train_opt['pixel_opt'].pop('type')
             cri_pix_cls = getattr(loss_module, pixel_type)  #根据pop出来的loss_type找到对应的loss函数
-            self.cri_pix = cri_pix_cls(**train_opt['pixel_opt']).to(
-                self.device)      #如何写 weighted loss 呢？传参构造Loss函数
+            # Create a copy so you don't modify the original config globally
+            pixel_opt = train_opt['pixel_opt'].copy()
+
+            # Remove the specific key that is causing the error
+            pixel_opt.pop('deep_supervision', None) 
+
+            # Initialize with the cleaned dictionary
+            self.cri_pix = cri_pix_cls(**pixel_opt).to(self.device)
         else:
             raise ValueError('pixel loss are None.')
 
@@ -150,7 +156,7 @@ class ImageCleanModel(BaseModel):
         # Remove global 'lr' from config so it doesn't conflict with groups
         if 'lr' in optim_params_cfg:
             optim_params_cfg.pop('lr')
-
+        
         # 2. Define lists
         backbone_params = []
         head_params = []
@@ -160,7 +166,7 @@ class ImageCleanModel(BaseModel):
         head_names_debug = []
         
         # Keywords for your backbones
-        backbone_keywords = ['rgb_net', 'thm_net', 'dep_net']
+        backbone_keywords = ['rgb_net', 'thm_net', 'dep_net', 'nrm_net', 'ill_net', 'ref_net']
         
         for k, v in self.net_g.named_parameters():
             if v.requires_grad:
@@ -452,7 +458,8 @@ class ImageCleanModel(BaseModel):
             self.net_g.eval()
             with torch.no_grad():
                 pred = self.net_g(img)
-                # pred = pred[0] # deep supervision
+                if self.opt['train']['pixel_opt'].get('deep_supervision', False) == True:
+                    pred = pred[0] # deep supervision
             if isinstance(pred, list):
                 pred = pred[-1]
             self.output = pred
@@ -510,496 +517,305 @@ class ImageCleanModel(BaseModel):
         # Save image
         cv2.imwrite(save_path, color_img[:, :, ::-1])  # RGB→BGR for OpenCV
 
-    # PST900 and MFNET
-    # def nondist_validation(self, dataloader, current_iter, tb_logger,
-    #                     save_img, rgb2bgr, use_image):
-    #     """
-    #     Dataset-level validation with correct global mIoU computation.
-    #     """
-    #     self.net_g.eval()
-    #     from sklearn.metrics import confusion_matrix
-    #     from functools import partial
-    #     import numpy as np
+    def nondist_validation(self, dataloader, current_iter, tb_logger, save_img, rgb2bgr, use_image):
+        """
+        Unified validation entry point. 
+        Dispatches to specific validation logic based on dataset name or config parameters.
+        """
+        dataset_name = self.opt.get('dataset_name')
+        print(dataset_name)
         
-    #     dataset_name = dataloader.dataset.opt['name']
-    #     with_metrics = self.opt['val'].get('metrics') is not None
-    #     num_classes = self.opt['val'].get('num_classes', 5)
+        # Determine task type based on config or dataset name
+        # 1. Check for CART specific segmentation
+        if 'CART' in dataset_name:
+            return self._validate_cart(dataloader, current_iter, tb_logger, save_img, rgb2bgr)
         
-    #     # Initialize global confusion matrix
-    #     global_cm = np.zeros((num_classes, num_classes), dtype=np.int64)
-    #     cnt = 0
-        
-    #     # Color map for visualization
-    #     color_map = np.array([
-    #         [0, 0, 0],       # Class 0: Background
-    #         [255, 0, 0],     # Class 1: Red
-    #         [0, 255, 0],     # Class 2: Green
-    #         [0, 0, 255],     # Class 3: Blue
-    #         [255, 255, 0],   # Class 4: Yellow
-    #     ], dtype=np.uint8)
-        
-    #     window_size = self.opt['val'].get('window_size', 0)
-    #     test = partial(self.pad_test, window_size) if window_size else self.nonpad_test
-        
-    #     with torch.no_grad():  # Ensure no gradients during validation
-    #         for idx, val_data in enumerate(dataloader):
-    #             img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
-    #             self.feed_data(val_data)
-                
-    #             # Run inference
-    #             test()
-    #             visuals = self.get_current_visuals()
-                
-    #             # ============================================
-    #             # 1. Process predictions for metrics FIRST
-    #             # ============================================
-    #             if with_metrics and 'gt' in visuals:
-    #                 pred_tensor = visuals['result']  # [1, C, H, W] or [C, H, W]
-    #                 gt_tensor = visuals['gt']        # [1, 1, H, W] or [1, H, W]
-                    
-    #                 # Convert to [H, W] format
-    #                 if pred_tensor.dim() == 4:
-    #                     assert pred_tensor.size(0) == 1, "Batch size must be 1"
-    #                     pred_labels = torch.argmax(pred_tensor[0], dim=0)  # [H, W]
-    #                 elif pred_tensor.dim() == 3:
-    #                     pred_labels = torch.argmax(pred_tensor, dim=0)  # [H, W]
-    #                 else:
-    #                     raise ValueError(f"Unexpected pred shape: {pred_tensor.shape}")
-                    
-    #                 if gt_tensor.dim() == 4:
-    #                     gt_labels = gt_tensor[0, 0]  # [H, W]
-    #                 elif gt_tensor.dim() == 3:
-    #                     gt_labels = gt_tensor[0]  # [H, W]
-    #                 else:
-    #                     gt_labels = gt_tensor
-                    
-    #                 # Convert to numpy
-    #                 pred_np = pred_labels.cpu().numpy().astype(np.int64)
-    #                 gt_np = gt_labels.cpu().numpy().astype(np.int64)
-                    
-    #                 # Flatten and filter valid pixels
-    #                 pred_flat = pred_np.flatten()
-    #                 gt_flat = gt_np.flatten()
-    #                 mask = (gt_flat >= 0) & (gt_flat < num_classes)
-                    
-    #                 if mask.sum() > 0:
-    #                     pred_flat = pred_flat[mask]
-    #                     gt_flat = gt_flat[mask]
-    #                     # Update global confusion matrix
-    #                     global_cm += confusion_matrix(
-    #                         gt_flat, pred_flat, 
-    #                         labels=list(range(num_classes))
-    #                     )
-    #                 else:
-    #                     print(f"Warning: No valid pixels in {img_name}")
-                
-    #             # ============================================
-    #             # 2. Save visualizations
-    #             # ============================================
-    #             if save_img:
-    #                 save_dir = osp.join(self.opt['path']['visualization'], dataset_name)
-    #                 os.makedirs(save_dir, exist_ok=True)
-                    
-    #                 # Colorize segmentation masks
-    #                 pred_tensor = visuals['result']
-    #                 if pred_tensor.dim() == 4:
-    #                     pred_labels = torch.argmax(pred_tensor[0], dim=0)
-    #                 else:
-    #                     pred_labels = torch.argmax(pred_tensor, dim=0)
-                    
-    #                 pred_colored = color_map[pred_labels.cpu().numpy()]
-                    
-    #                 save_img_path = osp.join(save_dir, f"{img_name}_pred.png")
-    #                 imwrite(pred_colored, save_img_path)
-                    
-    #                 if 'gt' in visuals:
-    #                     gt_tensor = visuals['gt']
-    #                     if gt_tensor.dim() == 4:
-    #                         gt_labels = gt_tensor[0, 0]
-    #                     elif gt_tensor.dim() == 3:
-    #                         gt_labels = gt_tensor[0]
-    #                     else:
-    #                         gt_labels = gt_tensor
-                        
-    #                     gt_colored = color_map[gt_labels.cpu().numpy()]
-    #                     save_gt_img_path = osp.join(save_dir, f"{img_name}_gt.png")
-    #                     imwrite(gt_colored, save_gt_img_path)
-                
-    #             # ============================================
-    #             # 3. Clear GPU memory
-    #             # ============================================
-    #             del self.lq
-    #             if hasattr(self, 'output'):
-    #                 del self.output
-    #             if hasattr(self, 'gt'):
-    #                 del self.gt
-    #             torch.cuda.empty_cache()
-                
-    #             cnt += 1
-        
-    #     # ============================================
-    #     # 4. Compute dataset-level metrics
-    #     # ============================================
-    #     intersection = np.diag(global_cm)
-    #     union = global_cm.sum(1) + global_cm.sum(0) - intersection
-        
-    #     # Only compute IoU for classes that exist
-    #     valid_classes = union > 0
-    #     iou_per_class = np.full(num_classes, np.nan)
-    #     iou_per_class[valid_classes] = intersection[valid_classes] / union[valid_classes]
-        
-    #     mean_iou = np.nanmean(iou_per_class)
-    #     pixel_acc = intersection.sum() / (global_cm.sum() + 1e-10)
-        
-    #     # ============================================
-    #     # 5. Log results
-    #     # ============================================
-    #     print(f"\n{'='*50}")
-    #     print(f"Validation Results: {dataset_name}")
-    #     print(f"{'='*50}")
-    #     print(f"Processed images: {cnt}")
-    #     print(f"Mean IoU:         {mean_iou:.4f}")
-    #     print(f"Pixel Accuracy:   {pixel_acc:.4f}")
-    #     print(f"Valid classes:    {valid_classes.sum()} / {num_classes}")
-    #     print(f"\nIoU per class:")
-    #     for i in range(num_classes):
-    #         if valid_classes[i]:
-    #             print(f"  Class {i}: {iou_per_class[i]:.4f}")
-    #         else:
-    #             print(f"  Class {i}: N/A (not present)")
-    #     print(f"{'='*50}\n")
-        
-    #     # TensorBoard logging
-    #     if with_metrics and tb_logger is not None:
-    #         tb_logger.add_scalar(f'{dataset_name}/mean_iou', mean_iou, current_iter)
-    #         tb_logger.add_scalar(f'{dataset_name}/pixel_acc', pixel_acc, current_iter)
-    #         for i in range(num_classes):
-    #             if valid_classes[i]:
-    #                 tb_logger.add_scalar(
-    #                     f'{dataset_name}/class_{i}_iou', 
-    #                     iou_per_class[i], 
-    #                     current_iter
-    #                 )
-        
-    #     self.net_g.train()
-    #     return mean_iou
-    # PST900 and MFNET
+        # 2. Check for Generic Segmentation (PST900, MFNET, etc.)
+        # We assume it's segmentation if 'num_classes' is defined in val config
+        elif self.opt.get('num_classes') is not None:
+            return self._validate_segmentation_generic(dataloader, current_iter, tb_logger, save_img, rgb2bgr)
+            
+        # 3. Default to Enhancement/Restoration
+        else:
+            return self._validate_enhancement(dataloader, current_iter, tb_logger, save_img, rgb2bgr, use_image)
 
-    # CART
-    # import torch
-    # import numpy as np
-    # import os
-    # import os.path as osp
-    # from sklearn.metrics import confusion_matrix
-    # from functools import partial
-    # import cv2
-
-    # # Note: This is designed to be a method inside your Model class.
-    # # Ensure 'self.net_g', 'self.opt', 'self.feed_data', etc. are available.
-
-    # def nondist_validation(self, dataloader, current_iter, tb_logger,
-    #                     save_img, rgb2bgr, use_image):
-    #     """
-    #     CART Dataset-level validation with correct global mIoU computation.
-    #     - Handles CART label remapping (IDs 2-11 -> 0-9).
-    #     - Ignores IDs 0 (Unknown) and 1 (Background).
-    #     """
-    #     self.net_g.eval()
-    #     import numpy as np
-    #     import os
-    #     import os.path as osp
-    #     from sklearn.metrics import confusion_matrix
-    #     from functools import partial
-    #     import cv2
+    def _validate_segmentation_generic(self, dataloader, current_iter, tb_logger, save_img, rgb2bgr):
+        """
+        Generic Segmentation Validation (e.g., PST900, MFNET)
+        """
+        print("SEGMENTATION GENERIC EVAL")
+        self.net_g.eval()
+        from sklearn.metrics import confusion_matrix
+        from functools import partial
+        import numpy as np
         
-    #     dataset_name = dataloader.dataset.opt['name']
-    #     with_metrics = self.opt['val'].get('metrics') is not None
-    #     # Force 10 classes for CART (indices 0-9)
-    #     num_classes = 10 
-        
-    #     # Initialize global confusion matrix
-    #     global_cm = np.zeros((num_classes, num_classes), dtype=np.int64)
-    #     cnt = 0
-        
-    #     # -------------------------------------------------------------------------
-    #     # CART Color Map (RGB)
-    #     # Maps indices 0-9 (which correspond to raw IDs 2-11) to colors
-    #     # -------------------------------------------------------------------------
-    #     # 0: Bare Ground (F2D8C4), 1: Rocky (594636), 2: Structure (A6A6A6), 3: Road (52595A)
-    #     # 4: Shrubs (9BE600), 5: Trees (008A35), 6: Sky (00D8F5), 7: Water (0D7FFC)
-    #     # 8: Vehicles (FFF900), 9: Person (FE00AA)
-    #     color_map = np.array([
-    #         [242, 216, 196], # 0: Bare Ground
-    #         [89, 70, 54],    # 1: Rocky
-    #         [166, 166, 166], # 2: Structure
-    #         [82, 89, 90],    # 3: Road
-    #         [155, 230, 0],   # 4: Shrubs
-    #         [0, 138, 53],    # 5: Trees
-    #         [0, 216, 245],   # 6: Sky
-    #         [13, 127, 252],  # 7: Water
-    #         [255, 249, 0],   # 8: Vehicles
-    #         [254, 0, 170],   # 9: Person
-    #     ], dtype=np.uint8)
-        
-    #     if rgb2bgr:
-    #         # Flip RGB to BGR for OpenCV saving
-    #         color_map = color_map[:, ::-1]
-
-    #     window_size = self.opt['val'].get('window_size', 0)
-    #     test = partial(self.pad_test, window_size) if window_size else self.nonpad_test
-        
-    #     with torch.no_grad():  # Ensure no gradients during validation
-    #         for idx, val_data in enumerate(dataloader):
-    #             img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
-    #             self.feed_data(val_data)
-                
-    #             # Run inference
-    #             test()
-    #             visuals = self.get_current_visuals()
-                
-    #             # ============================================
-    #             # 1. Process predictions for metrics FIRST
-    #             # ============================================
-    #             if with_metrics and 'gt' in visuals:
-    #                 pred_tensor = visuals['result']  # [1, C, H, W]
-    #                 gt_tensor = visuals['gt']        # [1, 1, H, W] or [1, H, W]
-                    
-    #                 # --- Get Prediction Labels (0-9) ---
-    #                 if pred_tensor.dim() == 4:
-    #                     pred_labels = torch.argmax(pred_tensor[0], dim=0) # [H, W]
-    #                 else:
-    #                     pred_labels = torch.argmax(pred_tensor, dim=0)
-                    
-    #                 # --- Get GT Labels (Raw 0-11) ---
-    #                 if gt_tensor.dim() == 4:
-    #                     gt_labels = gt_tensor[0, 0] # [H, W]
-    #                 elif gt_tensor.dim() == 3:
-    #                     gt_labels = gt_tensor[0]
-    #                 else:
-    #                     gt_labels = gt_tensor
-                    
-    #                 pred_np = pred_labels.cpu().numpy().astype(np.int64)
-    #                 gt_np = gt_labels.cpu().numpy().astype(np.int64)
-                    
-    #                 # --- CART SPECIFIC: Remap & Filter GT ---
-    #                 # 1. Identify valid pixels: Raw IDs 2 through 11
-    #                 valid_mask = (gt_np >= 2) & (gt_np <= 11)
-                    
-    #                 # 2. Remap valid pixels: 2->0, 3->1, ... 11->9
-    #                 gt_remapped = gt_np.copy()
-    #                 gt_remapped[valid_mask] = gt_remapped[valid_mask] - 2
-    #                 gt_remapped[~valid_mask] = -1 # Mark invalid as -1
-                    
-    #                 # Flatten arrays
-    #                 pred_flat = pred_np.flatten()
-    #                 gt_flat = gt_remapped.flatten()
-                    
-    #                 # 3. Filter for confusion matrix
-    #                 # Keep only pixels where GT is 0-9 (derived from valid_mask)
-    #                 mask = (gt_flat >= 0) & (gt_flat < num_classes)
-                    
-    #                 if mask.sum() > 0:
-    #                     pred_flat = pred_flat[mask]
-    #                     gt_flat = gt_flat[mask]
-                        
-    #                     # Update global confusion matrix
-    #                     global_cm += confusion_matrix(
-    #                         gt_flat, pred_flat, 
-    #                         labels=list(range(num_classes))
-    #                     )
-    #                 else:
-    #                     # It's possible an image contains ONLY background/unknown
-    #                     pass 
-                
-    #             # ============================================
-    #             # 2. Save visualizations
-    #             # ============================================
-    #             if save_img:
-    #                 save_dir = osp.join(self.opt['path']['visualization'], dataset_name)
-    #                 os.makedirs(save_dir, exist_ok=True)
-                    
-    #                 # --- Colorize Prediction ---
-    #                 # pred_labels is already 0-9, maps directly to color_map
-    #                 pred_colored = color_map[pred_labels.cpu().numpy()]
-    #                 save_img_path = osp.join(save_dir, f"{img_name}_pred.png")
-    #                 cv2.imwrite(save_img_path, pred_colored)
-                    
-    #                 # --- Colorize Ground Truth ---
-    #                 if 'gt' in visuals:
-    #                     gt_vis = gt_labels.cpu().numpy().copy() # Raw 0-11
-    #                     h, w = gt_vis.shape
-                        
-    #                     # Initialize black image (for IDs 0 and 1)
-    #                     gt_colored = np.zeros((h, w, 3), dtype=np.uint8)
-                        
-    #                     # Mask valid pixels (2-11)
-    #                     valid_mask_2d = (gt_vis >= 2) & (gt_vis <= 11)
-                        
-    #                     # Remap indices for color lookup (2->0, etc)
-    #                     valid_indices = gt_vis[valid_mask_2d] - 2
-                        
-    #                     # Assign colors
-    #                     gt_colored[valid_mask_2d] = color_map[valid_indices]
-                        
-    #                     save_gt_img_path = osp.join(save_dir, f"{img_name}_gt.png")
-    #                     cv2.imwrite(save_gt_img_path, gt_colored)
-                
-    #             # ============================================
-    #             # 3. Clear GPU memory
-    #             # ============================================
-    #             del self.lq
-    #             if hasattr(self, 'output'):
-    #                 del self.output
-    #             if hasattr(self, 'gt'):
-    #                 del self.gt
-    #             torch.cuda.empty_cache()
-                
-    #             cnt += 1
-        
-    #     # ============================================
-    #     # 4. Compute dataset-level metrics
-    #     # ============================================
-    #     intersection = np.diag(global_cm)
-    #     union = global_cm.sum(1) + global_cm.sum(0) - intersection
-        
-    #     # Only compute IoU for classes that exist in the union
-    #     valid_classes = union > 0
-    #     iou_per_class = np.full(num_classes, np.nan)
-    #     iou_per_class[valid_classes] = intersection[valid_classes] / union[valid_classes]
-        
-    #     mean_iou = np.nanmean(iou_per_class)
-    #     pixel_acc = intersection.sum() / (global_cm.sum() + 1e-10)
-        
-    #     # ============================================
-    #     # 5. Log results
-    #     # ============================================
-    #     print(f"\n{'='*50}")
-    #     print(f"Validation Results: {dataset_name}")
-    #     print(f"{'='*50}")
-    #     print(f"Processed images: {cnt}")
-    #     print(f"Mean IoU:         {mean_iou:.4f}")
-    #     print(f"Pixel Accuracy:   {pixel_acc:.4f}")
-        
-    #     class_names = [
-    #         "Bare Ground", "Rocky", "Structure", "Road", "Shrubs", 
-    #         "Trees", "Sky", "Water", "Vehicles", "Person"
-    #     ]
-        
-    #     print(f"\nIoU per class:")
-    #     for i in range(num_classes):
-    #         name = class_names[i] if i < len(class_names) else f"Class {i}"
-    #         if valid_classes[i]:
-    #             print(f"  {name:<12}: {iou_per_class[i]:.4f}")
-    #         else:
-    #             print(f"  {name:<12}: N/A (not present)")
-    #     print(f"{'='*50}\n")
-        
-    #     # TensorBoard logging
-    #     if with_metrics and tb_logger is not None:
-    #         tb_logger.add_scalar(f'{dataset_name}/mean_iou', mean_iou, current_iter)
-    #         tb_logger.add_scalar(f'{dataset_name}/pixel_acc', pixel_acc, current_iter)
-    #         for i in range(num_classes):
-    #             if valid_classes[i]:
-    #                 name = class_names[i] if i < len(class_names) else f"class_{i}"
-    #                 tb_logger.add_scalar(
-    #                     f'{dataset_name}/{name}_iou', 
-    #                     iou_per_class[i], 
-    #                     current_iter
-    #                 )
-        
-    #     self.net_g.train()
-    #     return mean_iou
-    
-    # CART
-
-
-
-    # ENH Version
-    def nondist_validation(self, dataloader, current_iter, tb_logger,
-                           save_img, rgb2bgr, use_image):
-        # self.net_g.eval()
-        # # for name, module in self.net_g.named_modules():
-        # #     print(name, module.training)
         dataset_name = dataloader.dataset.opt['name']
         with_metrics = self.opt['val'].get('metrics') is not None
-        if with_metrics:
-            self.metric_results = {
-                metric: 0
-                for metric in self.opt['val']['metrics'].keys()
-            }
-        # pbar = tqdm(total=len(dataloader), unit='image')
+        num_classes = self.opt.get('num_classes')
+        print(num_classes, type(num_classes))
+        assert num_classes is not None, "Number of classes has to be defined to test segmentation"
+        
+        # Initialize global confusion matrix
+        global_cm = np.zeros((num_classes, num_classes), dtype=np.int64)
+        cnt = 0
+        
+        # Color map for visualization (Default 5 classes)
+        # Modify this if you have more classes or different colors for generic datasets
+        color_map = np.array([
+            [0, 0, 0],       # Class 0: Background
+            [255, 0, 0],     # Class 1: Red
+            [0, 255, 0],     # Class 2: Green
+            [0, 0, 255],     # Class 3: Blue
+            [255, 255, 0],   # Class 4: Yellow
+        ], dtype=np.uint8)
+        
+        window_size = self.opt['val'].get('window_size', 0)
+        test = partial(self.pad_test, window_size) if window_size else self.nonpad_test
+        
+        with torch.no_grad():
+            for idx, val_data in enumerate(dataloader):
+                img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
+                self.feed_data(val_data)
+                test()
+                visuals = self.get_current_visuals()
+                
+                # --- Metrics ---
+                if with_metrics and 'gt' in visuals:
+                    pred_tensor = visuals['result']
+                    gt_tensor = visuals['gt']
+                    
+                    # Get labels
+                    pred_labels = torch.argmax(pred_tensor[0] if pred_tensor.dim() == 4 else pred_tensor, dim=0)
+                    gt_labels = gt_tensor[0, 0] if gt_tensor.dim() == 4 else (gt_tensor[0] if gt_tensor.dim() == 3 else gt_tensor)
+                    
+                    pred_np = pred_labels.cpu().numpy().astype(np.int64)
+                    gt_np = gt_labels.cpu().numpy().astype(np.int64)
+                    
+                    pred_flat = pred_np.flatten()
+                    gt_flat = gt_np.flatten()
+                    mask = (gt_flat >= 0) & (gt_flat < num_classes)
+                    
+                    if mask.sum() > 0:
+                        global_cm += confusion_matrix(gt_flat[mask], pred_flat[mask], labels=list(range(num_classes)))
+
+                # --- Visualization ---
+                if save_img:
+                    save_dir = osp.join(self.opt['path']['visualization'], dataset_name)
+                    os.makedirs(save_dir, exist_ok=True)
+                    
+                    pred_labels = torch.argmax(visuals['result'][0] if visuals['result'].dim() == 4 else visuals['result'], dim=0)
+                    pred_colored = color_map[pred_labels.cpu().numpy()]
+                    imwrite(pred_colored, osp.join(save_dir, f"{img_name}_pred.png"))
+                    
+                    if 'gt' in visuals:
+                        gt_t = visuals['gt']
+                        gt_labels = gt_t[0, 0] if gt_t.dim() == 4 else (gt_t[0] if gt_t.dim() == 3 else gt_t)
+                        gt_colored = color_map[gt_labels.cpu().numpy()]
+                        imwrite(gt_colored, osp.join(save_dir, f"{img_name}_gt.png"))
+                
+                # Cleanup
+                del self.lq
+                if hasattr(self, 'output'): del self.output
+                if hasattr(self, 'gt'): del self.gt
+                torch.cuda.empty_cache()
+                cnt += 1
+        
+        # Calculate & Log Metrics
+        intersection = np.diag(global_cm)
+        union = global_cm.sum(1) + global_cm.sum(0) - intersection
+        valid_classes = union > 0
+        iou_per_class = np.full(num_classes, np.nan)
+        iou_per_class[valid_classes] = intersection[valid_classes] / union[valid_classes]
+        mean_iou = np.nanmean(iou_per_class)
+        pixel_acc = intersection.sum() / (global_cm.sum() + 1e-10)
+        
+        print(f"\n{'='*20} {dataset_name} Results {'='*20}")
+        print(f"Mean IoU: {mean_iou:.4f} | Pixel Acc: {pixel_acc:.4f}")
+        for i in range(num_classes):
+            if valid_classes[i]: print(f"  Class {i}: {iou_per_class[i]:.4f}")
+        print(f"{'='*50}\n")
+        
+        if with_metrics and tb_logger:
+            tb_logger.add_scalar(f'{dataset_name}/mean_iou', mean_iou, current_iter)
+            tb_logger.add_scalar(f'{dataset_name}/pixel_acc', pixel_acc, current_iter)
+            for i in range(num_classes):
+                if valid_classes[i]:
+                    tb_logger.add_scalar(f'{dataset_name}/class_{i}_iou', iou_per_class[i], current_iter)
+        
+        self.net_g.train()
+        return mean_iou
+
+    def _validate_cart(self, dataloader, current_iter, tb_logger, save_img, rgb2bgr):
+        """
+        CART Specific Validation (Remapping IDs 2-11 -> 0-9)
+        """
+        print("CART EVAL")
+        self.net_g.eval()
+        from sklearn.metrics import confusion_matrix
+        from functools import partial
+        import numpy as np
+        import cv2
+        
+        dataset_name = dataloader.dataset.opt['name']
+        with_metrics = self.opt['val'].get('metrics') is not None
+        num_classes = 10
+        
+        global_cm = np.zeros((num_classes, num_classes), dtype=np.int64)
+        cnt = 0
+        
+        # CART Color Map
+        color_map = np.array([
+            [242, 216, 196], [89, 70, 54], [166, 166, 166], [82, 89, 90],
+            [155, 230, 0], [0, 138, 53], [0, 216, 245], [13, 127, 252],
+            [255, 249, 0], [254, 0, 170]
+        ], dtype=np.uint8)
+        
+        if rgb2bgr: color_map = color_map[:, ::-1]
 
         window_size = self.opt['val'].get('window_size', 0)
+        test = partial(self.pad_test, window_size) if window_size else self.nonpad_test
+        
+        with torch.no_grad():
+            for idx, val_data in enumerate(dataloader):
+                img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
+                self.feed_data(val_data)
+                test()
+                visuals = self.get_current_visuals()
+                
+                # --- Metrics ---
+                if with_metrics and 'gt' in visuals:
+                    pred_tensor = visuals['result']
+                    gt_tensor = visuals['gt']
+                    
+                    pred_labels = torch.argmax(pred_tensor[0] if pred_tensor.dim() == 4 else pred_tensor, dim=0)
+                    gt_labels = gt_tensor[0, 0] if gt_tensor.dim() == 4 else (gt_tensor[0] if gt_tensor.dim() == 3 else gt_tensor)
+                    
+                    pred_np = pred_labels.cpu().numpy().astype(np.int64)
+                    gt_np = gt_labels.cpu().numpy().astype(np.int64)
+                    
+                    # Remap GT: Valid 2-11 -> 0-9
+                    valid_mask = (gt_np >= 2) & (gt_np <= 11)
+                    gt_remapped = gt_np.copy()
+                    gt_remapped[valid_mask] = gt_remapped[valid_mask] - 2
+                    gt_remapped[~valid_mask] = -1
+                    
+                    pred_flat = pred_np.flatten()
+                    gt_flat = gt_remapped.flatten()
+                    mask = (gt_flat >= 0) & (gt_flat < num_classes)
+                    
+                    if mask.sum() > 0:
+                        global_cm += confusion_matrix(gt_flat[mask], pred_flat[mask], labels=list(range(num_classes)))
+                
+                # --- Visualization ---
+                if save_img:
+                    save_dir = osp.join(self.opt['path']['visualization'], dataset_name)
+                    os.makedirs(save_dir, exist_ok=True)
+                    
+                    pred_labels = torch.argmax(visuals['result'][0] if visuals['result'].dim() == 4 else visuals['result'], dim=0)
+                    pred_colored = color_map[pred_labels.cpu().numpy()]
+                    cv2.imwrite(osp.join(save_dir, f"{img_name}_pred.png"), pred_colored)
+                    
+                    if 'gt' in visuals:
+                        gt_vis = gt_labels.cpu().numpy().copy()
+                        gt_colored = np.zeros((gt_vis.shape[0], gt_vis.shape[1], 3), dtype=np.uint8)
+                        valid_mask_2d = (gt_vis >= 2) & (gt_vis <= 11)
+                        gt_colored[valid_mask_2d] = color_map[gt_vis[valid_mask_2d] - 2]
+                        cv2.imwrite(osp.join(save_dir, f"{img_name}_gt.png"), gt_colored)
+                
+                # Cleanup
+                del self.lq
+                if hasattr(self, 'output'): del self.output
+                if hasattr(self, 'gt'): del self.gt
+                torch.cuda.empty_cache()
+                cnt += 1
+        
+        # Calculate & Log Metrics
+        intersection = np.diag(global_cm)
+        union = global_cm.sum(1) + global_cm.sum(0) - intersection
+        valid_classes = union > 0
+        iou_per_class = np.full(num_classes, np.nan)
+        iou_per_class[valid_classes] = intersection[valid_classes] / union[valid_classes]
+        mean_iou = np.nanmean(iou_per_class)
+        pixel_acc = intersection.sum() / (global_cm.sum() + 1e-10)
+        
+        class_names = ["Bare Ground", "Rocky", "Structure", "Road", "Shrubs", "Trees", "Sky", "Water", "Vehicles", "Person"]
+        print(f"\n{'='*20} {dataset_name} Results {'='*20}")
+        print(f"Mean IoU: {mean_iou:.4f} | Pixel Acc: {pixel_acc:.4f}")
+        for i in range(num_classes):
+             if valid_classes[i]: print(f"  {class_names[i]:<12}: {iou_per_class[i]:.4f}")
+        print(f"{'='*50}\n")
+        
+        if with_metrics and tb_logger:
+            tb_logger.add_scalar(f'{dataset_name}/mean_iou', mean_iou, current_iter)
+            tb_logger.add_scalar(f'{dataset_name}/pixel_acc', pixel_acc, current_iter)
+            for i in range(num_classes):
+                if valid_classes[i]:
+                    tb_logger.add_scalar(f'{dataset_name}/{class_names[i]}_iou', iou_per_class[i], current_iter)
+        
+        self.net_g.train()
+        return mean_iou
 
-        if window_size:
-            test = partial(self.pad_test, window_size)
-        else:
-            test = self.nonpad_test
-
+    def _validate_enhancement(self, dataloader, current_iter, tb_logger, save_img, rgb2bgr, use_image):
+        """
+        Enhancement Validation (PSNR, SSIM, etc.)
+        """
+        print("ENHANCEMENT EVAL")
+        from copy import deepcopy
+        
+        dataset_name = dataloader.dataset.opt['name']
+        with_metrics = self.opt['val'].get('metrics') is not None
+        
+        if with_metrics:
+            self.metric_results = {metric: 0 for metric in self.opt['val']['metrics'].keys()}
+            
+        window_size = self.opt['val'].get('window_size', 0)
+        test = partial(self.pad_test, window_size) if window_size else self.nonpad_test
+        
         cnt = 0
-
         for idx, val_data in enumerate(dataloader):
             img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
             self.feed_data(val_data)
             test()
-
             visuals = self.get_current_visuals()
-            sr_img = tensor2img([visuals['result']], rgb2bgr=rgb2bgr)
+            
+            # Convert tensors to images for metrics/saving if using traditional metrics
+            sr_img = tensor2img_enh([visuals['result']], rgb2bgr=rgb2bgr)
+            gt_img = None
             if 'gt' in visuals:
-                gt_img = tensor2img([visuals['gt']], rgb2bgr=rgb2bgr)
+                gt_img = tensor2img_enh([visuals['gt']], rgb2bgr=rgb2bgr)
                 del self.gt
 
-            # tentative for out of GPU memory
+            # Cleanup GPU memory early
             del self.lq
             del self.output
             torch.cuda.empty_cache()
 
+            # --- Visualization ---
             if save_img:
-
                 if self.opt['is_train']:
-
-                    save_img_path = osp.join(self.opt['path']['visualization'],
-                                             img_name,
-                                             f'{img_name}_{current_iter}.png')
-
-                    save_gt_img_path = osp.join(self.opt['path']['visualization'],
-                                                img_name,
-                                                f'{img_name}_{current_iter}_gt.png')
+                    save_path_base = osp.join(self.opt['path']['visualization'], img_name)
+                    save_img_path = f'{save_path_base}_{current_iter}.png'
+                    save_gt_path = f'{save_path_base}_{current_iter}_gt.png'
                 else:
-
-                    save_img_path = osp.join(
-                        self.opt['path']['visualization'], dataset_name,
-                        f'{img_name}.png')
-                    save_gt_img_path = osp.join(
-                        self.opt['path']['visualization'], dataset_name,
-                        f'{img_name}_gt.png')
+                    save_path_base = osp.join(self.opt['path']['visualization'], dataset_name)
+                    os.makedirs(save_path_base, exist_ok=True)
+                    save_img_path = osp.join(save_path_base, f'{img_name}.png')
+                    save_gt_path = osp.join(save_path_base, f'{img_name}_gt.png')
 
                 imwrite(sr_img, save_img_path)
-                imwrite(gt_img, save_gt_img_path)
+                if gt_img is not None:
+                    imwrite(gt_img, save_gt_path)
 
-            if with_metrics:
-                # calculate metrics
+            # --- Metrics ---
+            if with_metrics and gt_img is not None:
                 opt_metric = deepcopy(self.opt['val']['metrics'])
-                if use_image:
-                    for name, opt_ in opt_metric.items():
-                        metric_type = opt_.pop('type')
-                        self.metric_results[name] += getattr(
-                            metric_module, metric_type)(sr_img, gt_img, **opt_)
-                else:
-                    for name, opt_ in opt_metric.items():
-                        metric_type = opt_.pop('type')
-                        # # print("metric module:", metric_module)
-                        # # print("visuals shape and tyoe", visuals['result'].shape, visuals['gt'].shape, type(visuals['result']))
-                        # # --- Save raw tensors for debugging ---
-                        # base_save_dir = "validation_outputs"  # fixed independent path
-                        # save_dir = os.path.join(base_save_dir, f"iter_{current_iter}")
-                        # os.makedirs(save_dir, exist_ok=True)
-
-                        # # self.save_tensor_as_image(visuals['result'], save_dir, f"{img_name}_pred")
-                        # # self.save_tensor_as_image(visuals['gt'], save_dir, f"{img_name}_gt")
-
-                        self.metric_results[name] += getattr(
-                            metric_module, metric_type)(visuals['result'], visuals['gt'], **opt_)
+                for name, opt_ in opt_metric.items():
+                    metric_type = opt_.pop('type')
+                    if use_image:
+                        self.metric_results[name] += getattr(metric_module, metric_type)(sr_img, gt_img, **opt_)
+                    else:
+                        # Use raw tensors if configured (requires metric module support)
+                        self.metric_results[name] += getattr(metric_module, metric_type)(visuals['result'], visuals['gt'], **opt_)
 
             cnt += 1
 
@@ -1008,12 +824,9 @@ class ImageCleanModel(BaseModel):
             for metric in self.metric_results.keys():
                 self.metric_results[metric] /= cnt
                 current_metric = self.metric_results[metric]
-
-            self._log_validation_metric_values(current_iter, dataset_name,
-                                               tb_logger)
-        # self.net_g.train()
-        # for name, module in self.net_g.fusion_module.named_modules():
-        #     print(name, module.training)
+            
+            self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
+            
         return current_metric
 
     def _log_validation_metric_values(self, current_iter, dataset_name,
@@ -1046,9 +859,10 @@ class ImageCleanModel(BaseModel):
         self.save_training_state(epoch, current_iter, **kwargs)
 
     def save_best(self, best_metric, param_key='params'):
-        psnr = best_metric['psnr']
+        measurement_key = list(self.opt["val"]["metrics"].keys())[0]
+        measurement_value = best_metric[measurement_key]
         cur_iter = best_metric['iter']
-        save_filename = f'best_psnr_{psnr:.2f}_{cur_iter}.pth'
+        save_filename = f'best_{measurement_key}_{measurement_value:.2f}_{cur_iter}.pth'
         exp_root = self.opt['path']['experiments_root']
         save_path = os.path.join(
             self.opt['path']['experiments_root'], save_filename)
