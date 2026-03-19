@@ -21,6 +21,7 @@ git clone https://github.com/raulbalmez/VesperMuse.git
 ```bash
 cd VesperMuse
 conda create -n vespermuse python=3.9.25 -y
+conda activate vespermuse
 ```
 
 
