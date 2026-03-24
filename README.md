@@ -2,10 +2,6 @@
 
 VesperMUSE is a multi-modal Vision Transformer designed to perform robust image semantic segmentation across a wide variety of lighting conditions.
 
-## Features
-* **Multi-Modal Fusion:**
-* **Robust Vision Transformer:**
-* **Streamlined Inference:**
 
 ## Installation
 
@@ -32,6 +28,11 @@ pip install -r requirements.txt
 Note: There might be an issue with the torch installation. If that is the case please run this first and after that install the requirements as indicated above:
 ```bash
 pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+```
+
+4. Usually, the variable PYTHONPATH must be set for a smooth run and package finding.
+```bash
+export PYTHONPATH=$PYTHONPATH:<path/to/VesperMuse/basicsr>
 ```
 
 ## Training
