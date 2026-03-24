@@ -49,7 +49,8 @@ python basicsr/train.py --opt <path/to/option.yml>
 To evaluate the models, you must provide the original training configuration file along with the corresponding saved model weights (typically generated and saved in the experiments/ directory).
 
 1. Segmentation
-Note: You must also specify the number of target classes based on your chosen dataset (e.g., 5 for PST900 or 10 for CART).
+
+_Note: You must also specify the number of target classes based on your chosen dataset (e.g., 5 for PST900 or 10 for CART)._
 
 ```bash
 python Enhancement/test_from_dataset_SEG.py --opt <path/to/option.yml> --weights <path/to/weights.pth> --num_classes <NUM_CLASSES> --tta
