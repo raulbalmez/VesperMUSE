@@ -392,7 +392,7 @@ from basicsr.utils import FileClient, imfrombytes, img2tensor, padding
 # Optional Augmentation
 import albumentations as A
 
----
+
 
 class Dataset_PairedImage_Enhancement(data.Dataset):
     """Dataset for RGB + Thermal image restoration/enhancement."""
@@ -486,7 +486,6 @@ class Dataset_PairedImage_Enhancement(data.Dataset):
     def __len__(self):
         return len(self.paths)
 
----
 
 class Dataset_PairedImage_Segmentation(data.Dataset):
     """Dataset for RGB + Thermal Semantic Segmentation."""

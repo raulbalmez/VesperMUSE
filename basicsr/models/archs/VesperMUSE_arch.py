@@ -545,16 +545,18 @@ class FusionModule(nn.Module):
         return x, aux
 
 class VesperMUSE_General(nn.Module):
-    def __init__(self, num_classes=1, llie_path="/home/upt/VesperMuse/experiments/CART_LLIE/best_psnr_27.74_284500.pth", depth_variant="depth-anything/Depth-Anything-V2-Small-hf", **kwargs):
+    def __init__(self, num_classes=1, use_llie=False, llie_path=None, depth_variant="depth-anything/Depth-Anything-V2-Small-hf", **kwargs):
         super(VesperMUSE_General, self).__init__()
 
         self.fusion_module = FusionModule(num_classes=num_classes)
         
-        self.llie_enhancer = LLIE_Enhancer()
-        self._load_weights(self.llie_enhancer, llie_path)
-        self.llie_enhancer.eval()
-        for p in self.llie_enhancer.parameters():
-            p.requires_grad = False
+        self.use_llie = use_llie
+        if self.use_llie:
+            self.llie_enhancer = LLIE_Enhancer()
+            self._load_weights(self.llie_enhancer, llie_path)
+            self.llie_enhancer.eval()
+            for p in self.llie_enhancer.parameters():
+                p.requires_grad = False
 
         self.depth_processor = AutoImageProcessor.from_pretrained(depth_variant)
         self.depth_model = AutoModelForDepthEstimation.from_pretrained(depth_variant)
@@ -562,15 +564,6 @@ class VesperMUSE_General(nn.Module):
         for p in self.depth_model.parameters():
             p.requires_grad = False
 
-        self.aug_geo = K.AugmentationSequential(
-            K.RandomHorizontalFlip(p=0.5),
-            K.RandomVerticalFlip(p=0.2),
-            K.RandomAffine(degrees=15, translate=(0.0625, 0.0625), scale=(0.8, 1.2), p=0.5),
-            data_keys=["input", "input", "input"],
-            same_on_batch=False,
-        )
-        
-        self.aug_color = K.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=0.8)
         self.normalize = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
     def _load_weights(self, model, path):
@@ -602,7 +595,7 @@ class VesperMUSE_General(nn.Module):
         rgb = x[:, :3, :, :]
         thermal = x[:, 3:, :, :] 
 
-        if True:
+        if self.use_llie:
             if not any(p.requires_grad for p in self.llie_enhancer.parameters()):
                 with torch.no_grad():
                     rgb = self.llie_enhancer(torch.cat([rgb, thermal], dim=1))
@@ -650,9 +643,9 @@ class SegmentationHead(nn.Module):
         return self.conv(x)
 
 class VesperMUSE_General_Seg(nn.Module):
-    def __init__(self, num_classes=1, freeze_backbone=True, pretrained=True):
+    def __init__(self, num_classes=1, use_llie=False, llie_path=None):
         super(VesperMUSE_General_Seg, self).__init__()
-        self.backbone = VesperMUSE_General(num_classes=num_classes)
+        self.backbone = VesperMUSE_General(num_classes=num_classes, use_llie=use_llie, llie_path=llie_path)
         self.head = SegmentationHead(in_channels=256, num_classes=num_classes)
 
     def forward(self, x):

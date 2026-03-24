@@ -274,6 +274,38 @@ class CrossModalMHSA(nn.Module):
         out = rearrange(out, 'b head c (h w) -> b (head c) h w', head=self.num_heads, h=H, w=W)
 
         return self.proj_out(out)
+    
+class MHSA_Thermal(nn.Module):
+    def __init__(self, dim, num_heads, bias=True):
+        super(MHSA_Thermal, self).__init__()
+        self.num_heads = num_heads
+        self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
+
+        self.q_proj = nn.Conv2d(dim, dim, kernel_size=1, bias=bias) 
+        self.k_proj = nn.Conv2d(dim, dim, kernel_size=1, bias=bias) 
+        self.v_proj = nn.Conv2d(dim, dim, kernel_size=1, bias=bias) 
+        self.out_proj = nn.Conv2d(dim, dim, kernel_size=1, bias=bias)
+
+    def forward(self, x_rgb, x_thermal):
+        B, C, H, W = x_rgb.shape
+
+        q = self.q_proj(x_rgb)
+        k = self.k_proj(x_rgb)
+        v = self.v_proj(x_thermal)
+
+        q = rearrange(q, 'b (h c) h1 w1 -> b h c (h1 w1)', h=self.num_heads)
+        k = rearrange(k, 'b (h c) h1 w1 -> b h c (h1 w1)', h=self.num_heads)
+        v = rearrange(v, 'b (h c) h1 w1 -> b h c (h1 w1)', h=self.num_heads)
+
+        q, k = F.normalize(q, dim=-1), F.normalize(k, dim=-1)
+
+        attn = torch.matmul(q, k.transpose(-2, -1)) * self.temperature
+        attn = attn.softmax(dim=-1)
+
+        out = torch.matmul(attn, v)
+        out = rearrange(out, 'b h c (h1 w1) -> b (h c) h1 w1', h=self.num_heads, h1=H, w1=W)
+
+        return self.out_proj(out)
 
 
 # ==============================================================================
@@ -285,7 +317,7 @@ class TransformerBlock_LLIE(nn.Module):
         if dim_feedforward is None:
             dim_feedforward = in_channels * 2
 
-        self.cross_attention = CrossModalMHSA_LLIE(in_channels, num_heads)
+        self.cross_attention = MHSA_Thermal(in_channels, num_heads)
         self.norm1 = LayerNorm(dim=in_channels, LayerNorm_type=LayerNorm_type)
         self.ffn = FFN(dim=in_channels)
         self.norm2 = LayerNorm(dim=in_channels, LayerNorm_type=LayerNorm_type)
@@ -319,7 +351,7 @@ class TransformerBlock_Fusion(nn.Module):
         if dim_feedforward is None:
             dim_feedforward = in_channels * 2
 
-        self.attention = CrossModalMHSA(in_channels, num_heads)
+        self.attention = MHSA_Thermal(in_channels, num_heads)
         self.norm1 = LayerNorm(dim=in_channels, LayerNorm_type=LayerNorm_type)
         self.ffn = FFN(dim=in_channels)
         self.norm2 = LayerNorm(dim=in_channels, LayerNorm_type=LayerNorm_type)
@@ -595,16 +627,18 @@ class FusionModule(nn.Module):
         return x, aux
 
 class VesperMUSE_General(nn.Module):
-    def __init__(self, num_classes=1, llie_path="/home/upt/VesperMuse/experiments/CART_LLIE/CART_LLIE/best_psnr_27.85_299500.pth", depth_variant="depth-anything/Depth-Anything-V2-Small-hf", **kwargs):
+    def __init__(self, num_classes=1, use_llie=False, llie_path=None, depth_variant="depth-anything/Depth-Anything-V2-Small-hf", **kwargs):
         super(VesperMUSE_General, self).__init__()
 
         self.fusion_module = FusionModule(num_classes=num_classes)
         
-        self.llie_enhancer = LLIE_Enhancer()
-        self._load_weights(self.llie_enhancer, llie_path)
-        self.llie_enhancer.eval()
-        for p in self.llie_enhancer.parameters():
-            p.requires_grad = False
+        self.use_llie = use_llie
+        if self.use_llie:
+            self.llie_enhancer = LLIE_Enhancer()
+            self._load_weights(self.llie_enhancer, llie_path)
+            self.llie_enhancer.eval()
+            for p in self.llie_enhancer.parameters():
+                p.requires_grad = False
 
         self.depth_processor = AutoImageProcessor.from_pretrained(depth_variant)
         self.depth_model = AutoModelForDepthEstimation.from_pretrained(depth_variant)
@@ -650,7 +684,7 @@ class VesperMUSE_General(nn.Module):
         rgb = x[:, :3, :, :]
         thermal = x[:, 3:, :, :] 
 
-        if True:
+        if self.use_llie:
             if not any(p.requires_grad for p in self.llie_enhancer.parameters()):
                 with torch.no_grad():
                     rgb = self.llie_enhancer(torch.cat([rgb, thermal], dim=1))
@@ -702,9 +736,9 @@ class SegmentationHead(nn.Module):
         return self.conv(x)
 
 class VesperMUSE_General_Seg_4mods(nn.Module):
-    def __init__(self, num_classes=1, freeze_backbone=True, pretrained=True):
+    def __init__(self, num_classes=1, use_llie=False, llie_path=None):
         super(VesperMUSE_General_Seg_4mods, self).__init__()
-        self.backbone = VesperMUSE_General(num_classes=num_classes)
+        self.backbone = VesperMUSE_General(num_classes=num_classes, use_llie=use_llie, llie_path=llie_path)
         self.head = SegmentationHead(in_channels=256, num_classes=num_classes)
 
     def forward(self, x):

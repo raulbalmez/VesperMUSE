@@ -560,16 +560,18 @@ class FusionModule(nn.Module):
         return x, aux
 
 class VesperMUSE_General(nn.Module):
-    def __init__(self, llie_path="/home/upt/VesperMuse/experiments/CART_LLIE/best_psnr_27.74_284500.pth", depth_variant="depth-anything/Depth-Anything-V2-Small-hf", **kwargs):
+    def __init__(self, num_classes=1, use_llie=False, llie_path=None, depth_variant="depth-anything/Depth-Anything-V2-Small-hf", **kwargs):
         super(VesperMUSE_General, self).__init__()
 
-        self.fusion_module = FusionModule(**kwargs)
-        self.enhancer = LLIE_Enhancer()
-        self._load_weights(self.enhancer, llie_path)
-        
-        self.enhancer.eval()
-        for p in self.enhancer.parameters():
-            p.requires_grad = False
+        self.fusion_module = FusionModule(num_classes=num_classes)
+
+        self.use_llie = use_llie
+        if self.use_llie:
+            self.llie_enhancer = LLIE_Enhancer()
+            self._load_weights(self.llie_enhancer, llie_path)
+            self.llie_enhancer.eval()
+            for p in self.llie_enhancer.parameters():
+                p.requires_grad = False
 
         self.depth_model = AutoModelForDepthEstimation.from_pretrained(depth_variant)
         self.depth_model.eval()
@@ -608,10 +610,12 @@ class VesperMUSE_General(nn.Module):
         rgb = x[:, :3, :, :]
         thermal = x[:, 3:, :, :] 
 
-        with torch.no_grad():
-            rgb = self.enhancer(torch.cat([rgb, thermal], dim=1))
-            rgb = rgb.clamp(0, 1)
-            thermal = thermal.clamp(0, 1)
+        if self.use_llie:
+            if not any(p.requires_grad for p in self.llie_enhancer.parameters()):
+                with torch.no_grad():
+                    rgb = self.llie_enhancer(torch.cat([rgb, thermal], dim=1))
+            else:
+                rgb = self.llie_enhancer(torch.cat([rgb, thermal], dim=1))
 
         rgb_norm = (rgb - self.mean) / self.std
 
@@ -634,7 +638,7 @@ class VesperMUSE_General(nn.Module):
         return seg_out, aux
 
 class SegmentationHead(nn.Module):
-    def __init__(self, in_channels, num_classes):
+    def __init__(self, in_channels, num_classes=1):
         super(SegmentationHead, self).__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, 32, 3, padding=1),
@@ -648,9 +652,9 @@ class SegmentationHead(nn.Module):
         return self.conv(x)
 
 class VesperMUSE_General_Seg_2mods(nn.Module):
-    def __init__(self, num_classes=1, freeze_backbone=True, pretrained=True):
+    def __init__(self, num_classes=1, use_llie=False, llie_path=None):
         super(VesperMUSE_General_Seg_2mods, self).__init__()
-        self.backbone = VesperMUSE_General(num_classes=num_classes)
+        self.backbone = VesperMUSE_General(num_classes=num_classes, use_llie=use_llie, llie_path=llie_path)
         self.head = SegmentationHead(in_channels=256, num_classes=num_classes)
 
     def forward(self, x):

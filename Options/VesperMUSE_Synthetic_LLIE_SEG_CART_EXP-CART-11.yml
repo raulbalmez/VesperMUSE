@@ -62,6 +62,8 @@ datasets:
 network_g:
   type: VesperMUSE_General_Seg
   num_classes: 10
+  use_llie: True
+  llie_checkpoint: /home/upt/VesperMuse/experiments/CART_LLIE/best_psnr_27.74_284500.pth
 
 
 # path
