@@ -62,6 +62,13 @@ python Enhancement/test_from_dataset_SEG.py --opt <path/to/option.yml> --weights
 python Enhancement/test_from_dataset_LLIE.py --opt <path/to/option.yml> --weights <path/to/weights.pth> --tta
 ```
 
+## Options (configuration files)
+
+_Note: The network can be trained in multiple ways using multiple configuration files (eg. using LLIE or not, checkpoints for different LLIE usages and so on)._
+
+All the configurations used for development have been provided. These can be found in the _Options/_ folder and stand as a very comprehensive guideline to create more ways in which VesperMUSE can be run. Before training, read through each field, as they are self-explanatory and feel free to modify the fields that best suit your purpose.
+
+
 ## Weights and data
 
 Access the datasets (which will be put under the data/ folder) as well as the weights.
