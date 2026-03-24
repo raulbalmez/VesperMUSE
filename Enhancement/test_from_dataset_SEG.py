@@ -219,7 +219,7 @@ if __name__ == "__main__":
     parser.add_argument("--opt", type=str, required=True, help="YAML config")
     parser.add_argument("--weights", type=str, required=True, help="checkpoint .pth")
     parser.add_argument("--save_dir", type=str, default="./results_seg/")
-    parser.add_argument("--dataset", type=str, choices=["cart", "pst900"], default="cart", 
+    parser.add_argument("--dataset", type=str, required=True, choices=["cart", "pst900"], 
                         help="Dataset logic to apply to confusion matrix (cart or pst900)")
     parser.add_argument("--num_classes", type=int, required=True) 
     parser.add_argument("--tta", action="store_true")
