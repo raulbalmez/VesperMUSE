@@ -552,7 +552,6 @@ class ImageCleanModel(BaseModel):
         dataset_name = dataloader.dataset.opt['name']
         with_metrics = self.opt['val'].get('metrics') is not None
         num_classes = self.opt.get('num_classes')
-        print(num_classes, type(num_classes))
         assert num_classes is not None, "Number of classes has to be defined to test segmentation"
         
         # Initialize global confusion matrix
