@@ -85,7 +85,6 @@ class HybridLoss_LLIE(nn.Module):
         self.device = device
 
     def forward(self, y_true, y_pred):
-        print("ENH LOSS")
         total_loss = 0
         loss_dict = {}
 
