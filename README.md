@@ -19,7 +19,7 @@
 
 ## 📌 Highlights
 
-- **State of the art on CART** — **76.72% mIoU**, surpassing the previous best (CM-SSM, 74.60%) by **+2.12 mIoU**, with the top score on 8 of 10 classes.
+- **Competitive on CART** — **76.72% mIoU**, surpassing the previous best (CM-SSM, 74.60%) by **+2.12 mIoU**, with the top score on 8 of 10 classes.
 - **Competitive on PST900** — **85.59% mIoU**, with the best IoU on *Background*, *Hand-Drill* and *Fire-Extinguisher*.
 - **Efficient low-light enhancement** — the LLIE branch reaches **27.47 dB / 27.74 dB PSNR** on PST900 LL / CART LL with only **0.45M parameters**, ~4× fewer than the strongest baseline while staying within 0.11 dB.
 - **Synthetic low-light benchmarks** — PST900 LL and CART LL, paired low-light adaptations whose statistics (SNR ≈ 10.7 dB, gamma ≈ 1.00) closely match real low-light datasets such as LOL.
