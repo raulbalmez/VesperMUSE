@@ -65,8 +65,8 @@ Full comparison tables are available in the [paper](https://arxiv.org/abs/2610.2
 **1. Clone the repository**
 
 ```bash
-git clone https://github.com/raulbalmez/VesperMuse.git
-cd VesperMuse
+git clone https://github.com/raulbalmez/VesperMUSE.git
+cd VesperMUSE
 ```
 
 **2. Create the environment** (Python 3.9.25 was used for development and is recommended)
@@ -91,7 +91,7 @@ pip install -r requirements.txt
 **4. Set `PYTHONPATH`** so the packages are found correctly
 
 ```bash
-export PYTHONPATH=$PYTHONPATH:<path/to/VesperMuse/basicsr>
+export PYTHONPATH=$PYTHONPATH:<path/to/VesperMUSE/basicsr>
 ```
 
 ## 📂 Weights and Data
