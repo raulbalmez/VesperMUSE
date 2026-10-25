@@ -5,11 +5,12 @@
 ### Multi-Modal Fusion Vision Transformer for Image Semantic Segmentation Under Diverse Light Conditions
 
 [![arXiv](https://img.shields.io/badge/arXiv-2610.21990-b31b1b.svg?style=flat-square&logo=arxiv)](https://arxiv.org/abs/2610.21990)
+[![Project Page](https://img.shields.io/badge/Project-Page-0b0b12.svg?style=flat-square&logo=githubpages&logoColor=white)](https://raulbalmez.github.io/VesperMUSE/)
 [![Python](https://img.shields.io/badge/Python-3.9-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.8-EE4C2C.svg?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Weights & Data](https://img.shields.io/badge/Weights%20%26%20Data-Google%20Drive-4285F4.svg?style=flat-square&logo=googledrive&logoColor=white)](https://drive.google.com/drive/folders/1VZwq-X9LnLF8Hghc-vgy1ppPXGaIgtce?usp=drive_link)
 
-[**Paper**](https://arxiv.org/abs/2610.21990) · [**Weights & Data**](https://drive.google.com/drive/folders/1VZwq-X9LnLF8Hghc-vgy1ppPXGaIgtce?usp=drive_link) · [**Results**](#-results) · [**Citation**](#-citation)
+[**Paper**](https://arxiv.org/abs/2610.21990) · [**Project Page**](https://raulbalmez.github.io/VesperMUSE/) · [**Weights & Data**](https://drive.google.com/drive/folders/1VZwq-X9LnLF8Hghc-vgy1ppPXGaIgtce?usp=drive_link) · [**Results**](#-results) · [**Citation**](#-citation)
 
 </div>
 

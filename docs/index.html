@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VesperMUSE — Multi-Modal Segmentation Under Diverse Light</title>
+<meta name="description" content="VesperMUSE: a multi-modal fusion Vision Transformer for semantic segmentation under diverse light conditions, with a thermal-guided low-light enhancement branch.">
+<meta property="og:title" content="VesperMUSE">
+<meta property="og:description" content="Multi-modal fusion Vision Transformer for image semantic segmentation under diverse light conditions.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#07080d; --bg2:#0c0e16; --panel:#10131d; --panel2:#151927;
+  --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+  --text:#e9e7e1; --mute:#9a9ba6; --dim:#62646f;
+  --ember:#ffb25b; --ember2:#ff7a45; --ice:#7f8cff; --mint:#6ee7c2;
+  --serif:'Fraunces',Georgia,'Times New Roman',serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-weight:400;line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+::selection{background:var(--ember);color:#000}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+.wrap{width:min(1180px,100% - 48px);margin:0 auto}
+#fx{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.9}
+main,header,footer,nav{position:relative;z-index:1}
+
+/* ---------- nav ---------- */
+nav{position:fixed;top:0;left:0;right:0;z-index:50;height:60px;display:flex;align-items:center;
+  backdrop-filter:blur(14px) saturate(140%);background:rgba(7,8,13,.62);border-bottom:1px solid var(--line);transition:transform .4s}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:24px}
+.brand{font-family:var(--serif);font-size:20px;letter-spacing:.01em;display:flex;align-items:center;gap:10px}
+.brand i{width:9px;height:9px;border-radius:50%;background:var(--ember);box-shadow:0 0 0 0 rgba(255,178,91,.6);animation:pulse 2.8s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 12px rgba(255,178,91,0)}100%{box-shadow:0 0 0 0 rgba(255,178,91,0)}}
+.links{display:flex;gap:26px;font-size:13.5px;color:var(--mute)}
+.links a{position:relative;padding:4px 0;transition:color .25s}
+.links a:hover,.links a.on{color:var(--text)}
+.links a::after{content:"";position:absolute;left:0;bottom:-2px;height:1px;width:100%;background:var(--ember);transform:scaleX(0);transform-origin:left;transition:transform .35s}
+.links a:hover::after,.links a.on::after{transform:scaleX(1)}
+.navbtn{font-size:13px;border:1px solid var(--line2);padding:6px 14px;border-radius:99px;transition:.25s;white-space:nowrap}
+.navbtn:hover{background:var(--text);color:#000;border-color:var(--text)}
+#prog{position:fixed;top:0;left:0;height:2px;width:0;background:linear-gradient(90deg,var(--ice),var(--ember));z-index:60}
+@media(max-width:860px){.links{display:none}}
+
+/* ---------- hero ---------- */
+header.hero{min-height:100vh;padding:120px 0 70px;display:flex;flex-direction:column;justify-content:center;gap:0}
+.hero .wrap{display:grid;grid-template-columns:1.02fr 1fr;gap:56px;align-items:center}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ember);display:flex;align-items:center;gap:12px}
+.eyebrow::before{content:"";width:34px;height:1px;background:var(--ember)}
+h1{font-family:var(--serif);font-weight:300;font-size:clamp(54px,8.4vw,112px);line-height:.95;letter-spacing:-.025em;margin:22px 0 22px}
+h1 em{font-style:italic;font-weight:300;background:linear-gradient(100deg,var(--ember) 10%,var(--ember2) 60%,var(--ice));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{font-size:clamp(17px,1.7vw,21px);color:var(--mute);max-width:560px;font-weight:300;line-height:1.55}
+.sub b{color:var(--text);font-weight:400}
+.byline{margin-top:30px;font-size:14px;color:var(--mute);display:flex;flex-wrap:wrap;gap:6px 18px}
+.byline strong{color:var(--text);font-weight:500}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px}
+.btn{display:inline-flex;align-items:center;gap:9px;padding:12px 22px;border-radius:99px;font-size:14px;font-weight:500;border:1px solid var(--line2);transition:.3s;position:relative;overflow:hidden}
+.btn svg{width:16px;height:16px}
+.btn.pri{background:var(--ember);color:#17120a;border-color:var(--ember)}
+.btn.pri:hover{box-shadow:0 0 38px rgba(255,178,91,.45);transform:translateY(-2px)}
+.btn:not(.pri):hover{border-color:var(--text);transform:translateY(-2px);background:rgba(255,255,255,.04)}
+
+.lantern{position:relative;aspect-ratio:16/10;border-radius:20px;overflow:hidden;border:1px solid var(--line2);cursor:none;background:#000;
+  box-shadow:0 40px 100px -30px rgba(255,150,60,.25),0 0 0 1px rgba(255,255,255,.03) inset;touch-action:none}
+.lantern img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity .6s}
+.lantern .lit{-webkit-mask-image:radial-gradient(circle var(--r,150px) at var(--x,50%) var(--y,50%),#000 0%,#000 35%,transparent 100%);mask-image:radial-gradient(circle var(--r,150px) at var(--x,50%) var(--y,50%),#000 0%,#000 35%,transparent 100%)}
+.lantern .dark{filter:brightness(1.35) saturate(.9)}
+.lantern .ring{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border:1px solid rgba(255,200,140,.7);border-radius:50%;left:var(--x);top:var(--y);pointer-events:none;box-shadow:0 0 30px rgba(255,170,80,.5);transition:width .3s,height .3s,margin .3s}
+.lantern:hover .ring{width:60px;height:60px;margin:-30px 0 0 -30px}
+.lantern .tag{position:absolute;left:14px;bottom:12px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.75);background:rgba(0,0,0,.45);padding:5px 10px;border-radius:99px;backdrop-filter:blur(6px)}
+.lantern .tag.r{left:auto;right:14px}
+.lant-hint{margin-top:12px;font-size:12px;color:var(--dim);font-family:var(--mono);display:flex;justify-content:space-between}
+.pick{display:flex;gap:8px}
+.pick button{width:34px;height:22px;border-radius:5px;border:1px solid var(--line2);background-size:cover;background-position:center;cursor:pointer;opacity:.55;transition:.25s;padding:0}
+.pick button.on,.pick button:hover{opacity:1;border-color:var(--ember)}
+
+.stats{margin-top:56px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.stat{background:rgba(12,14,22,.92);padding:22px 24px}
+.stat .n{font-family:var(--serif);font-weight:300;font-size:clamp(34px,4vw,52px);line-height:1;letter-spacing:-.02em}
+.stat .n sup{font-size:.4em;color:var(--ember);margin-left:3px;font-family:var(--sans);vertical-align:top;position:relative;top:.4em}
+.stat .l{margin-top:10px;font-size:12.5px;color:var(--mute);line-height:1.4}
+@media(max-width:940px){.hero .wrap{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.lantern{cursor:crosshair}}
+
+/* ---------- sections ---------- */
+section{padding:120px 0;border-top:1px solid var(--line)}
+.num{font-family:var(--mono);font-size:12px;color:var(--ember);letter-spacing:.14em}
+h2{font-family:var(--serif);font-weight:300;font-size:clamp(34px,4.6vw,60px);line-height:1.05;letter-spacing:-.02em;margin:14px 0 22px;max-width:880px}
+h2 em{font-style:italic;color:var(--ember)}
+.lead{font-size:clamp(16px,1.6vw,19px);color:var(--mute);max-width:760px;font-weight:300;line-height:1.7}
+.lead b{color:var(--text);font-weight:400}
+.rv{opacity:0;transform:translateY(34px);transition:opacity .9s cubic-bezier(.2,.7,.2,1),transform .9s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0s)}
+.rv.in{opacity:1;transform:none}
+
+.pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:56px}
+.pillar{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:18px;padding:30px 28px 32px;position:relative;overflow:hidden;transition:.4s}
+.pillar::before{content:"";position:absolute;inset:0;background:radial-gradient(420px circle at var(--mx,50%) var(--my,0%),rgba(255,178,91,.10),transparent 60%);opacity:0;transition:.4s}
+.pillar:hover{border-color:var(--line2);transform:translateY(-4px)}
+.pillar:hover::before{opacity:1}
+.pillar .k{font-family:var(--mono);font-size:11px;color:var(--ice);letter-spacing:.14em;text-transform:uppercase}
+.pillar h3{font-family:var(--serif);font-weight:400;font-size:25px;line-height:1.2;margin:14px 0 12px}
+.pillar p{font-size:14.5px;color:var(--mute)}
+.ico{width:46px;height:46px;border-radius:12px;border:1px solid var(--line2);display:grid;place-items:center;margin-bottom:22px;color:var(--ember)}
+.ico svg{width:22px;height:22px}
+@media(max-width:900px){.pillars{grid-template-columns:1fr}}
+
+/* pipeline */
+.pipe{margin-top:56px;background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:22px;padding:34px 30px}
+.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;position:relative}
+.flow::before{content:"";position:absolute;left:5%;right:5%;top:31px;height:1px;background:var(--line2)}
+.flow::after{content:"";position:absolute;left:5%;top:30px;height:3px;width:60px;border-radius:3px;background:linear-gradient(90deg,transparent,var(--ember),transparent);animation:run 3.6s linear infinite;filter:blur(.5px)}
+@keyframes run{from{left:5%}to{left:calc(95% - 60px)}}
+.node{position:relative;text-align:center;cursor:pointer;padding:0 6px}
+.node .dot{width:62px;height:62px;border-radius:50%;margin:0 auto 14px;border:1px solid var(--line2);background:var(--bg);display:grid;place-items:center;color:var(--mute);transition:.4s;position:relative;z-index:2}
+.node .dot svg{width:24px;height:24px}
+.node b{display:block;font-weight:500;font-size:14px}
+.node small{font-size:12px;color:var(--dim)}
+.node.on .dot,.node:hover .dot{border-color:var(--ember);color:var(--ember);box-shadow:0 0 40px rgba(255,178,91,.35);transform:scale(1.08)}
+.node.aux .dot{border-style:dashed}
+.panel{margin-top:30px;border-top:1px solid var(--line);padding-top:26px;display:grid;grid-template-columns:240px 1fr;gap:30px;min-height:120px}
+.panel h4{font-family:var(--serif);font-weight:400;font-size:24px;line-height:1.2}
+.panel p{color:var(--mute);font-size:15px;max-width:720px}
+@media(max-width:820px){.flow{grid-template-columns:1fr 1fr;row-gap:26px}.flow::before,.flow::after{display:none}.panel{grid-template-columns:1fr;gap:10px}}
+
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:60px 0 18px}
+.tab{font-size:13px;padding:8px 16px;border-radius:99px;border:1px solid var(--line2);color:var(--mute);cursor:pointer;background:none;transition:.25s;font-family:var(--sans)}
+.tab:hover{color:var(--text)}
+.tab.on{background:var(--text);color:#000;border-color:var(--text)}
+.figbox{background:#fff;border-radius:16px;padding:22px;cursor:zoom-in;overflow:hidden;position:relative}
+.figbox img{margin:0 auto;max-height:520px;width:auto;transition:transform .6s}
+.figbox:hover img{transform:scale(1.015)}
+.figcap{font-size:13px;color:var(--mute);margin-top:12px;max-width:820px}
+.fig{display:none}.fig.on{display:block;animation:fade .6s}
+@keyframes fade{from{opacity:0;transform:translateY(10px)}}
+
+/* synthetic table */
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:56px;margin-top:56px;align-items:center}
+@media(max-width:900px){.dgrid{grid-template-columns:1fr}}
+.pairs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pairs figure{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--line);aspect-ratio:16/10}
+.pairs img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity .5s}
+.pairs .o{opacity:0}.pairs figure:hover .o{opacity:1}
+.pairs figcaption{position:absolute;left:8px;bottom:8px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:rgba(0,0,0,.55);padding:3px 8px;border-radius:99px}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:560px}
+th,td{padding:11px 14px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:500;color:var(--mute);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--line2);background:rgba(255,255,255,.015)}
+td{border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;color:#c9c8c3}
+tr:last-child td{border-bottom:0}
+tbody tr{transition:background .2s}
+tbody tr:hover{background:rgba(255,255,255,.035)}
+td.best{color:var(--ember);font-weight:600}
+tr.ours td{background:rgba(255,178,91,.07);color:var(--text)}
+tr.ours td:first-child{box-shadow:inset 2px 0 0 var(--ember);font-weight:500}
+tr.ours td.best{color:var(--ember)}
+tr.var td{color:var(--mute)}
+.note{font-size:12.5px;color:var(--dim);margin-top:12px}
+
+/* explorer */
+.explore{margin-top:54px;display:grid;grid-template-columns:1fr 280px;gap:26px}
+.stage{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line2);aspect-ratio:16/9;background:#000}
+.stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .45s;image-rendering:auto}
+.stage img.on{opacity:1}
+.stage .lab{position:absolute;left:16px;top:14px;font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;background:rgba(0,0,0,.6);padding:6px 12px;border-radius:99px;backdrop-filter:blur(8px);z-index:3}
+.stage .lab span{color:var(--ember)}
+.side{display:flex;flex-direction:column;gap:20px}
+.side h5{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px;font-weight:400}
+.scenes{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.scenes button{aspect-ratio:1;border-radius:9px;border:1px solid var(--line2);background-size:cover;background-position:center;cursor:pointer;opacity:.55;transition:.25s;padding:0}
+.scenes button.on,.scenes button:hover{opacity:1;border-color:var(--ember)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12.5px;padding:6px 12px;border-radius:99px;border:1px solid var(--line2);background:none;color:var(--mute);cursor:pointer;font-family:var(--sans);transition:.2s}
+.chip:hover{color:var(--text)}
+.chip.on{background:var(--ember);color:#17120a;border-color:var(--ember);font-weight:500}
+.chip.ours.on{background:var(--mint);border-color:var(--mint)}
+.exnote{font-size:13px;color:var(--mute);line-height:1.55;border-left:2px solid var(--line2);padding-left:14px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mute)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px}
+@media(max-width:900px){.explore{grid-template-columns:1fr}}
+
+/* charts */
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:56px}
+@media(max-width:940px){.charts{grid-template-columns:1fr}}
+.chart{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:18px;padding:26px 26px 18px}
+.chart h4{font-family:var(--serif);font-weight:400;font-size:22px;margin-bottom:4px}
+.chart .cs{font-size:12.5px;color:var(--dim);margin-bottom:20px}
+.bar{display:grid;grid-template-columns:128px 1fr 54px;align-items:center;gap:12px;font-size:12.5px;margin:7px 0;color:var(--mute)}
+.bar .t{height:9px;background:rgba(255,255,255,.06);border-radius:9px;overflow:hidden}
+.bar .t i{display:block;height:100%;width:0;border-radius:9px;background:linear-gradient(90deg,#3b4170,var(--ice));transition:width 1.4s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0s)}
+.bar.ours{color:var(--text)}
+.bar.ours .t i{background:linear-gradient(90deg,var(--ember2),var(--ember))}
+.bar.var .t i{background:linear-gradient(90deg,#2a2d44,#5b5f86)}
+.bar b{font-variant-numeric:tabular-nums;text-align:right;font-weight:500;color:var(--text)}
+.bar.ours b{color:var(--ember)}
+.in .bar .t i,.chart.in .bar .t i{width:var(--w)}
+@media(max-width:520px){.bar{grid-template-columns:96px 1fr 46px}}
+
+.sub3{margin-top:70px;font-family:var(--serif);font-weight:400;font-size:28px;margin-bottom:6px}
+.subp{color:var(--mute);font-size:14.5px;margin-bottom:22px;max-width:760px}
+details{margin-top:22px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+summary{padding:16px 20px;cursor:pointer;font-size:14px;color:var(--mute);list-style:none;display:flex;justify-content:space-between;transition:.2s}
+summary:hover{color:var(--text)}
+summary::after{content:"+";color:var(--ember);font-size:18px;line-height:1}
+details[open] summary::after{content:"−"}
+details .tw{border:0;border-top:1px solid var(--line);border-radius:0 0 14px 14px}
+.lqual{margin-top:26px}.lqual img{max-height:780px}
+.callout{margin-top:26px;border:1px solid rgba(127,140,255,.3);background:rgba(127,140,255,.06);border-radius:14px;padding:18px 22px;font-size:14px;color:var(--mute)}
+.callout b{color:var(--text);font-weight:500}
+
+/* ablation */
+.abl{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:30px}
+@media(max-width:900px){.abl{grid-template-columns:1fr}}
+
+/* citation */
+.cite{position:relative;margin-top:36px;background:#05060a;border:1px solid var(--line2);border-radius:16px;padding:26px 28px;font-family:var(--mono);font-size:13px;line-height:1.75;color:#c9c8c3;overflow-x:auto;white-space:pre}
+.cite .k{color:var(--ice)}.cite .s{color:var(--ember)}
+.copy{position:absolute;top:14px;right:14px;font-family:var(--sans);font-size:12px;padding:6px 14px;border-radius:99px;border:1px solid var(--line2);background:rgba(10,12,18,.9);color:var(--text);cursor:pointer;transition:.25s}
+.copy:hover{background:var(--text);color:#000}
+footer{border-top:1px solid var(--line);padding:50px 0 70px;color:var(--dim);font-size:13px}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px}
+footer a{color:var(--mute);border-bottom:1px solid var(--line2)}
+footer a:hover{color:var(--text)}
+
+/* lightbox */
+.lb{position:fixed;inset:0;background:rgba(3,4,8,.94);z-index:100;display:none;place-items:center;padding:30px;cursor:zoom-out;backdrop-filter:blur(6px)}
+.lb.on{display:grid;animation:fade .3s}
+.lb img{max-height:92vh;max-width:96vw;border-radius:10px;background:#fff}
+
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div id="prog"></div>
+<canvas id="fx"></canvas>
+
+<nav>
+  <div class="wrap">
+    <a href="#top" class="brand"><i></i>VesperMUSE</a>
+    <div class="links">
+      <a href="#overview">Overview</a><a href="#method">Method</a><a href="#explore">Explore</a><a href="#results">Results</a><a href="#efficiency">Efficiency</a><a href="#citation">Citation</a>
+    </div>
+    <a class="navbtn" href="https://github.com/raulbalmez/VesperMUSE">GitHub ↗</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">University of Manchester · 2026</div>
+      <h1>Vesper<em>MUSE</em></h1>
+      <p class="sub"><b>Multi-Modal Fusion Vision Transformer</b> for image semantic segmentation under diverse light conditions — from well-lit scenes to near-total darkness.</p>
+      <div class="byline"><span><strong>Raul Balmez</strong></span><span>Supervisor: Tingting Mu</span><span>Department of Computer Science</span></div>
+      <div class="cta">
+        <a class="btn pri" href="https://arxiv.org/abs/2610.21990"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Paper</a>
+        <a class="btn" href="https://github.com/raulbalmez/VesperMUSE"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>Code</a>
+        <a class="btn" href="https://drive.google.com/drive/folders/1VZwq-X9LnLF8Hghc-vgy1ppPXGaIgtce?usp=drive_link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16"/></svg>Weights &amp; Data</a>
+      </div>
+    </div>
+    <div>
+      <div class="lantern" id="lantern">
+        <img class="dark" id="lDark" src="assets/pst_4_ll.jpg" alt="Synthetic low-light image">
+        <img class="lit" id="lLit" src="assets/pst_4_orig.jpg" alt="Original well-lit image">
+        <div class="ring"></div>
+        <span class="tag">Low-light · synthetic</span><span class="tag r">Well-lit · original</span>
+      </div>
+      <div class="lant-hint"><span>Move the light — PST900 sample and its synthetic low-light adaptation</span>
+        <span class="pick" id="lpick"></span></div>
+    </div>
+  </div>
+  <div class="wrap" style="display:block;margin-top:0">
+    <div class="stats rv">
+      <div class="stat"><div class="n"><span data-c="76.72" data-d="2">0</span><sup>%</sup></div><div class="l">mIoU on CART — new best, +2.12 over CM-SSM</div></div>
+      <div class="stat"><div class="n"><span data-c="85.59" data-d="2">0</span><sup>%</sup></div><div class="l">mIoU on PST900, best on 3 of 5 classes</div></div>
+      <div class="stat"><div class="n"><span data-c="0.454" data-d="3">0</span><sup>M</sup></div><div class="l">parameters in the LLIE branch — 4× fewer than ISALux</div></div>
+      <div class="stat"><div class="n"><span data-c="3" data-d="0">0</span><sup>modalities</sup></div><div class="l">RGB, thermal and surface normals — extensible to any number</div></div>
+    </div>
+  </div>
+</header>
+
+<main>
+<section id="overview">
+  <div class="wrap">
+    <div class="num rv">01 — OVERVIEW</div>
+    <h2 class="rv">Segmentation breaks when the light goes. <em>We rebuild what the dark removed.</em></h2>
+    <p class="lead rv" style="--d:.1s">Autonomous systems and UAVs depend on pixel-level scene understanding, yet segmentation accuracy collapses under noise, colour distortion and lost structure in low light. VesperMUSE attacks the problem at three levels: <b>physics-informed low-light data</b>, <b>thermal-guided enhancement</b>, and a <b>modality-agnostic fusion transformer</b> that adds geometric and thermal cues without architectural changes.</p>
+    <div class="pillars">
+      <div class="pillar rv" style="--d:.0s"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></div><div class="k">Data</div><h3>Synthetic low-light adaptation</h3><p>A physics-informed algorithm turns any well-lit RGB set into paired low-light data. The resulting PST900 LL and CART LL match real low-light statistics (SNR ≈ 10.7 dB, γ ≈ 1.00).</p></div>
+      <div class="pillar rv" style="--d:.12s"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 14.8V4a2 2 0 1 0-4 0v10.8a4 4 0 1 0 4 0z"/></svg></div><div class="k">Enhancement</div><h3>Thermal-guided LLIE</h3><p>A two-level Transformer with RGB-Thermal cross-attention restores colour, edges and texture using the illumination-invariant thermal stream, with only 0.45M parameters.</p></div>
+      <div class="pillar rv" style="--d:.24s"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2 3 7l9 5 9-5zM3 12l9 5 9-5M3 17l9 5 9-5"/></svg></div><div class="k">Fusion</div><h3>Modality-agnostic attention</h3><p>A fusion self-attention fuses global (average-pooled) and local (max-pooled) cues from an arbitrary number of auxiliary inputs, with no change when sensors change.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="method">
+  <div class="wrap">
+    <div class="num rv">02 — METHOD</div>
+    <h2 class="rv">From a dark frame to a <em>labelled scene</em>.</h2>
+    <p class="lead rv">Select a stage to see what it does. The enhancement branch is optional: the fusion network can read the raw RGB, a low-light frame, or the enhanced frame.</p>
+    <div class="pipe rv">
+      <div class="flow" id="flow">
+        <div class="node on" data-i="0"><div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div><b>Low-light RGB</b><small>input or synthesised</small></div>
+        <div class="node" data-i="1"><div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 14.8V4a2 2 0 1 0-4 0v10.8a4 4 0 1 0 4 0z"/></svg></div><b>Thermal LLIE</b><small>0.45M params</small></div>
+        <div class="node" data-i="2"><div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 3 8l9 5 9-5zM3 13l9 5 9-5"/></svg></div><b>Aux. modalities</b><small>thermal · surface normals</small></div>
+        <div class="node" data-i="3"><div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 11 15.7 7M8.3 13l7.4 4"/></svg></div><b>Fusion ViT</b><small>ResNet50 + ResNet18</small></div>
+        <div class="node" data-i="4"><div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></div><b>Segmentation</b><small>multi-scale decoder</small></div>
+      </div>
+      <div class="panel"><h4 id="pt"></h4><p id="pp"></p></div>
+    </div>
+
+    <div class="tabs rv" id="figtabs">
+      <button class="tab on" data-f="0">LLIE module</button><button class="tab" data-f="1">Fusion ViT</button><button class="tab" data-f="2">Fusion self-attention</button>
+    </div>
+    <div class="rv">
+      <div class="fig on"><div class="figbox"><img src="assets/fig_llie.png" alt="LLIE module" loading="lazy"></div><p class="figcap"><b>LLIE module.</b> Thermal-aware Transformer Blocks (TTB) combine channel-wise RGB-Thermal cross-attention with a gated feed-forward network in a two-level U-shaped encoder-decoder.</p></div>
+      <div class="fig"><div class="figbox"><img src="assets/fig_seg.png" alt="Fusion ViT" loading="lazy"></div><p class="figcap"><b>Fusion Vision Transformer.</b> Asymmetric ResNet50 (RGB) and ResNet18 (auxiliary) backbones; every stage fuses features with a Fusion Encoder Block, and a lightweight Transformer decoder with deep-supervision heads produces the final map.</p></div>
+      <div class="fig"><div class="figbox"><img src="assets/fig_attn.png" alt="Fusion self-attention" loading="lazy"></div><p class="figcap"><b>Modality-agnostic attention.</b> Queries and keys come from the primary modality. The value is modulated by local (max-pooled) and global (average-pooled) summaries of k auxiliary modalities, so k can change with no architectural edit. Complexity stays O(HWC).</p></div>
+    </div>
+
+    <div class="dgrid">
+      <div class="rv">
+        <h3 class="sub3" style="margin-top:0">Synthetic data that behaves like the real thing</h3>
+        <p class="subp">Hover a frame to light it up and compare the synthetic low-light version with the original. Image statistics of the generated sets sit next to real low-light benchmarks, not next to naive darkening.</p>
+        <div class="pairs">
+          <figure><img class="b" src="assets/pst_1_ll.jpg" alt=""><img class="o" src="assets/pst_1_orig.jpg" alt=""><figcaption>PST900</figcaption></figure>
+          <figure><img class="b" src="assets/pst_2_ll.jpg" alt=""><img class="o" src="assets/pst_2_orig.jpg" alt=""><figcaption>PST900</figcaption></figure>
+          <figure><img class="b" src="assets/pst_3_ll.jpg" alt=""><img class="o" src="assets/pst_3_orig.jpg" alt=""><figcaption>PST900</figcaption></figure>
+          <figure><img class="b" src="assets/pst_4_ll.jpg" alt=""><img class="o" src="assets/pst_4_orig.jpg" alt=""><figcaption>PST900</figcaption></figure>
+        </div>
+      </div>
+      <div class="rv" style="--d:.12s">
+        <div class="tw"><table id="tstat"></table></div>
+        <p class="note">SNR in dB; NMI measures information retained from the well-lit image; a gamma of ≈ 1 matches real low-light capture.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="explore">
+  <div class="wrap">
+    <div class="num rv">03 — EXPLORE</div>
+    <h2 class="rv">See every stage on <em>PST900</em>.</h2>
+    <p class="lead rv">Five test scenes from the paper's qualitative comparison. Switch between input modalities, ground truth and predictions from VesperMUSE and four recent RGB-T methods.</p>
+    <div class="explore rv">
+      <div class="stage" id="stage"><div class="lab" id="slab"></div></div>
+      <div class="side">
+        <div><h5>Scene</h5><div class="scenes" id="scenes"></div></div>
+        <div><h5>Inputs</h5><div class="chips" id="cin"></div></div>
+        <div><h5>Predictions</h5><div class="chips" id="cpred"></div></div>
+        <p class="exnote"><b style="color:var(--text);font-weight:500">VM LLIE</b> is the low-light configuration and shows the failure cases openly: a near-black frame still defeats it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <div class="num rv">04 — RESULTS</div>
+    <h2 class="rv">State of the art on <em>CART</em>, competitive on PST900.</h2>
+    <p class="lead rv">Mean IoU (%) against recent RGB-T and RGB-D-T methods. VesperMUSE reaches the top overall score on CART and the best IoU on several classes of both datasets, using standard ResNet backbones.</p>
+
+    <div class="charts">
+      <div class="chart rv" id="ch1"><h4>CART</h4><div class="cs">mIoU (%) — 10 classes</div><div id="b1"></div></div>
+      <div class="chart rv" id="ch2" style="--d:.12s"><h4>PST900</h4><div class="cs">mIoU (%) — 5 classes</div><div id="b2"></div></div>
+    </div>
+
+    <details class="rv" open><summary>Per-class IoU — CART (Table 4.4)</summary><div class="tw"><table id="t4"></table></div></details>
+    <details class="rv"><summary>Per-class IoU — PST900 (Table 4.3)</summary><div class="tw"><table id="t3"></table></div></details>
+
+    <h3 class="sub3 rv">Low-light enhancement</h3>
+    <p class="subp rv">The LLIE branch gets within 0.11 dB of the strongest baseline with roughly a quarter of its parameters, and outputs images the segmenter can read.</p>
+    <div class="tw rv"><table id="t2"></table></div>
+    <div class="figbox lqual rv"><img src="assets/fig_llie_qual.jpg" alt="Qualitative LLIE comparison" loading="lazy"></div>
+    <p class="figcap rv">Qualitative LLIE comparison on PST900 LL (left) and CART LL (right): input, low-light, thermal, Retinexformer, LYT-Net, ISALux and VesperMUSE LLIE.</p>
+
+    <div class="callout rv"><b>Reading the numbers honestly.</b> Feeding enhanced low-light frames to the segmenter (VesperMUSE LLIE) yields 78.18% on PST900 and 59.57% on CART. Enhancement recovers colour and macro-level terrain, but fine objects such as <i>Person</i> (0.00 IoU on CART) can be lost when the source frame carries almost no signal. The headline numbers use well-lit RGB input. Future work targets colour fidelity of the enhancement (colour-angle loss, luminance-only processing) and the computational cost of the fusion network.</div>
+  </div>
+</section>
+
+<section id="efficiency">
+  <div class="wrap">
+    <div class="num rv">05 — EFFICIENCY &amp; ABLATIONS</div>
+    <h2 class="rv">Where the accuracy <em>comes from</em>.</h2>
+    <p class="lead rv">The tri-input design costs FLOPs (321 G at 480×640, of which depth estimation accounts for 43 G) but stays below the largest competitor in parameter count while leading in accuracy.</p>
+    <div class="tw rv" style="margin-top:44px"><table id="t5"></table></div>
+    <div class="abl">
+      <div class="chart rv"><h4>Fusion and decoder choices</h4><div class="cs">mIoU (%) with the LLIE input · Concat = naive fusion, Conv dec. = conv decoder</div><div id="b3"></div></div>
+      <div class="chart rv" style="--d:.12s"><h4>Choice of primary modality</h4><div class="cs">PST900 mIoU (%) · enhanced RGB, T = thermal, N = surface normals</div><div id="b4"></div>
+        <p class="note" style="margin-top:14px">Enhanced RGB is the best primary stream. Thermal cannot lead, although as an auxiliary it adds more than surface normals.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="citation">
+  <div class="wrap">
+    <div class="num rv">06 — CITATION</div>
+    <h2 class="rv">Use it, <em>cite it</em>.</h2>
+    <p class="lead rv">Code and configurations are released under the Apache-2.0 licence; datasets and pretrained weights are on Google Drive. If VesperMUSE helps your research, please cite:</p>
+    <div class="cite rv" id="cite"><button class="copy" id="copy">Copy</button><span class="k">@article</span>{vespermuse2026,
+  <span class="k">title</span>   = {<span class="s">VesperMUSE: Multi-Modal Fusion Vision Transformer for Image Semantic Segmentation Under Diverse Light Conditions</span>},
+  <span class="k">author</span>  = {<span class="s">Balmez, Raul</span>},
+  <span class="k">journal</span> = {<span class="s">arXiv preprint arXiv:2610.21990</span>},
+  <span class="k">year</span>    = {<span class="s">2026</span>}
+}</div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Raul Balmez · Built on <a href="https://github.com/XPixelGroup/BasicSR">BasicSR</a></span>
+    <span>Datasets: <a href="https://github.com/ShreyasSkandanS/pst900_thermal_rgb">PST900</a> · <a href="https://arxiv.org/abs/2404.19385">CART</a></span>
+    <a href="#top">Back to top ↑</a>
+  </div>
+</footer>
+
+<div class="lb" id="lb"><img alt=""></div>
+
+<script>
+(()=>{
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+
+/* ---------- ambient fireflies ---------- */
+const cv=$('#fx'),cx=cv.getContext('2d');let W,H,P=[];
+function rs(){W=cv.width=innerWidth;H=cv.height=innerHeight;P=Array.from({length:Math.min(70,Math.floor(W*H/22000))},()=>({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.4+.3,a:Math.random()*6.28,s:Math.random()*.25+.05,p:Math.random()*6.28}))}
+rs();addEventListener('resize',rs);
+let sy=0;addEventListener('scroll',()=>{sy=scrollY});
+(function loop(t){cx.clearRect(0,0,W,H);
+  for(const q of P){q.a+=(Math.sin(t/3000+q.p)*.02);q.x+=Math.cos(q.a)*q.s;q.y+=Math.sin(q.a)*q.s-.04;
+    if(q.x<-10)q.x=W+10;if(q.x>W+10)q.x=-10;if(q.y<-10)q.y=H+10;
+    const al=.25+.35*Math.sin(t/1200+q.p);
+    const g=cx.createRadialGradient(q.x,q.y,0,q.x,q.y,q.r*7);g.addColorStop(0,`rgba(255,190,110,${al})`);g.addColorStop(1,'rgba(255,190,110,0)');
+    cx.fillStyle=g;cx.beginPath();cx.arc(q.x,q.y,q.r*7,0,6.28);cx.fill();}
+  requestAnimationFrame(loop)})(0);
+
+/* ---------- nav ---------- */
+const prog=$('#prog');
+addEventListener('scroll',()=>{const h=document.documentElement;prog.style.width=(scrollY/(h.scrollHeight-innerHeight)*100)+'%'},{passive:true});
+const secs=$$('main section'),lk=$$('.links a');
+secs.forEach(s=>new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)lk.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+s.id))}),{rootMargin:'-45% 0px -50% 0px'}).observe(s));
+
+/* ---------- reveal + counters ---------- */
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);
+  $$('[data-c]',e.target).forEach(count)}}),{threshold:.15});
+$$('.rv').forEach(el=>io.observe(el));
+if(location.search.includes('static')){document.head.insertAdjacentHTML('beforeend','<style>header.hero{min-height:0!important}*{transition:none!important}</style>');$$('img[loading]').forEach(i=>i.loading='eager');}
+if(location.search.includes('static'))$$('.rv,.chart').forEach(el=>{el.classList.add('in');$$('[data-c]',el).forEach(c=>c.textContent=(+c.dataset.c).toFixed(+c.dataset.d))});
+function count(el){const to=+el.dataset.c,d=+el.dataset.d,t0=performance.now(),D=1700;
+  (function f(t){const k=Math.min(1,(t-t0)/D),v=to*(1-Math.pow(1-k,4));el.textContent=v.toFixed(d);if(k<1)requestAnimationFrame(f)})(t0)}
+
+/* ---------- spotlight on pillars ---------- */
+$$('.pillar').forEach(p=>p.addEventListener('pointermove',e=>{const r=p.getBoundingClientRect();p.style.setProperty('--mx',(e.clientX-r.left)+'px');p.style.setProperty('--my',(e.clientY-r.top)+'px')}));
+
+/* ---------- lantern ---------- */
+const L=$('#lantern');let tx=.5,ty=.5,cxp=.5,cyp=.5,idle=true,idleT=0;
+const pairs=[1,2,3,4];
+const pk=$('#lpick');
+pairs.forEach(n=>{const b=document.createElement('button');b.style.backgroundImage=`url(assets/pst_${n}_orig.jpg)`;b.className=n===4?'on':'';b.onclick=()=>{
+  $('#lDark').src=`assets/pst_${n}_ll.jpg`;$('#lLit').src=`assets/pst_${n}_orig.jpg`;$$('button',pk).forEach(x=>x.classList.remove('on'));b.classList.add('on')};pk.appendChild(b)});
+function lm(e){const r=L.getBoundingClientRect();tx=(e.clientX-r.left)/r.width;ty=(e.clientY-r.top)/r.height;idle=false}
+L.addEventListener('pointermove',lm);L.addEventListener('pointerdown',lm);
+L.addEventListener('pointerleave',()=>{idle=true});
+L.addEventListener('pointerenter',()=>L.style.setProperty('--r','190px'));
+(function tick(t){
+  if(idle){tx=.5+.34*Math.sin(t/2300);ty=.5+.28*Math.sin(t/1700+1.2)}
+  cxp+=(tx-cxp)*.12;cyp+=(ty-cyp)*.12;
+  L.style.setProperty('--x',(cxp*100)+'%');L.style.setProperty('--y',(cyp*100)+'%');
+  requestAnimationFrame(tick)})(0);
+
+/* ---------- pipeline ---------- */
+const stages=[
+ ['Low-light RGB','The input can be a real dark frame or one produced by the physics-informed synthetic adaptation. It is characterised by low SNR, colour shift and washed-out structure.'],
+ ['Thermal-guided enhancement','A two-level U-shaped Transformer restores the frame. Thermal features, which do not depend on ambient light, are injected through channel-wise RGB-Thermal cross-attention (O(HWC)) in every block.'],
+ ['Auxiliary modalities','Thermal imagery and surface normals (estimated from monocular depth) are processed by a lightweight ResNet18. Surface normals expose geometric discontinuities and material boundaries that darkness hides.'],
+ ['Fusion Vision Transformer','At each of the four ResNet stages a Fusion Encoder Block merges auxiliary features into the RGB stream. Local max-pooled and global average-pooled cues are projected into one attention that works for any number of modalities.'],
+ ['Segmentation head','A lightweight attention-based decoder fuses multi-scale features and is trained with auxiliary heads on intermediate resolutions before a final ×4 interpolation produces the per-pixel class map.']];
+const nodes=$$('.node');let cur=0,auto=true;
+function setN(i){cur=i;nodes.forEach((n,k)=>n.classList.toggle('on',k===i));$('#pt').textContent=stages[i][0];$('#pp').textContent=stages[i][1]}
+nodes.forEach((n,i)=>n.addEventListener('click',()=>{auto=false;setN(i)}));
+setN(0);setInterval(()=>{if(auto)setN((cur+1)%5)},3800);
+
+/* ---------- figure tabs ---------- */
+$$('#figtabs .tab').forEach(t=>t.addEventListener('click',()=>{$$('#figtabs .tab').forEach(x=>x.classList.toggle('on',x===t));$$('.fig').forEach((f,i)=>f.classList.toggle('on',i===+t.dataset.f))}));
+
+/* ---------- lightbox ---------- */
+const lb=$('#lb');
+document.addEventListener('click',e=>{const f=e.target.closest('.figbox');if(f){$('img',lb).src=$('img',f).src;lb.classList.add('on')}else if(e.target.closest('#lb')){lb.classList.remove('on')}});
+addEventListener('keydown',e=>{if(e.key==='Escape')lb.classList.remove('on')});
+
+/* ---------- tables ---------- */
+function table(id,head,rows,opt={}){
+  const tb=$(id);const best=head.map((h,j)=>{if(j===0||opt.skip&&opt.skip.includes(j))return null;
+    const vs=rows.filter(r=>!r._noBest).map(r=>parseFloat(String(r[j]).split('/')[0])).filter(v=>!isNaN(v));
+    if(!vs.length)return null;return (opt.min&&opt.min.includes(j))?Math.min(...vs):Math.max(...vs)});
+  let h='<thead><tr>'+head.map(x=>`<th>${x}</th>`).join('')+'</tr></thead><tbody>';
+  rows.forEach(r=>{h+=`<tr class="${r._c||''}">`+r.slice(0,head.length).map((c,j)=>{
+    let cls='';if(best[j]!=null&&!r._noBest){const v=parseFloat(String(c).split('/')[0]);if(!isNaN(v)&&Math.abs(v-best[j])<1e-6)cls='best'}
+    return `<td class="${cls}">${c==null?'–':c}</td>`}).join('')+'</tr>'});
+  tb.innerHTML=h+'</tbody>'}
+function R(a,c,extra){a=a.slice();a._c=c;if(extra)Object.assign(a,extra);return a}
+
+table('#tstat',['Dataset','SNR ↑','NMI ↑','Exp. ↓','Gamma','Mean Y'],[
+ ['LOL v1','9.59','0.46','0.13','1.03','15.49'],['LOL v2 real','8.51','0.34','0.15','1.02','16.08'],['LOL v2 syn.','4.73','0.60','0.46','1.38','61.90'],['LOL-Blur','8.70','0.47','0.28','1.07','27.23'],
+ R(['PST900 LL','10.71','0.31','0.29','1.00','12.86'],'ours'),R(['CART LL','10.73','0.29','0.16','1.00','12.71'],'ours')],{skip:[1,2,3,4,5]});
+
+const cartH=['Method','Backbone','Bare Grd.','Rocky','Struct.','Road','Shrubs','Trees','Sky','Water','Vehicles','Person','mIoU'];
+const cart=[
+['GMNet21','ResNet152',81.5,88.8,83.8,60.3,70.8,79.5,92.0,97.4,54.8,17.8,72.7],
+['EGFNet22','ResNet101',80.3,85.2,56.3,60.5,69.9,78.4,92.8,97.4,57.2,17.1,69.5],
+['EAEFNet23','ResNet152',80.5,86.3,81.3,54.5,70.2,80.2,93.7,97.6,48.1,0.0,69.2],
+['CMNeXt23','Mit-B2',80.1,87.8,84.1,58.6,69.9,78.5,92.5,97.3,54.3,17.8,72.1],
+['CMX23','Mit-B2',82.4,90.3,85.0,60.4,71.0,79.9,93.6,97.6,57.9,22.2,74.0],
+['CRM24','Swin-B',81.6,90.0,85.1,61.6,69.5,77.9,92.3,97.4,37.7,20.6,71.4],
+['CLNet-T24','Mit-B4',81.8,89.3,84.8,61.5,71.3,79.5,93.4,97.5,52.3,25.1,73.7],
+['CAINet24','MobileNetV2',80.2,88.4,78.4,57.1,68.8,77.0,92.1,96.9,43.9,17.2,70.0],
+['MCNet-T25','ConvNeXtV2-B',80.5,86.9,83.7,58.0,69.7,78.0,92.9,97.7,58.1,31.5,73.7],
+['CM-SSM','EfficientViT-B1',82.6,89.7,84.9,61.0,71.3,79.1,92.9,97.6,62.0,24.5,74.6],
+R(['VesperMUSE LLIE','ResNet50/18',75.44,78.91,65.90,48.25,57.87,65.43,76.69,89.96,37.20,0.00,59.57],'var',{_noBest:1}),
+R(['VesperMUSE','ResNet50/18',87.06,90.77,86.72,65.38,72.57,77.98,91.50,97.78,63.14,34.26,76.72],'ours')];
+const fm=rows=>rows.map(r=>{const a=r.map(v=>typeof v==='number'?v.toFixed(2):v);a._c=r._c;a._noBest=r._noBest;return a});
+table('#t4',cartH,fm(cart),{skip:[1]});
+
+const pstH=['Method','Backbone','Backgr.','Hand-Drill','Backpack','Fire-Ext.','Survivor','mIoU'];
+const pst=[
+['EGFNet','–',99.26,64.67,83.05,71.29,74.30,78.51],
+['SA-Gate','–',99.25,81.01,79.77,72.97,62.22,79.05],
+['MMSMCNet23','Mit-B3',null,62.4,89.2,73.3,74.7,79.8],
+['CLNet-T24','Mit-B4',null,68.5,87.9,72.7,75.7,80.8],
+['DBCNet23','ResNet101',null,77.2,82.7,73.0,76.7,81.8],
+['C4Net-Mit25','Mit-B2',null,69.4,88.4,79.6,79.6,82.6],
+['SGFNet23','ResNet152',null,76.7,85.4,75.6,76.7,82.8],
+['MDNet25','Mit-B2',null,69.5,89.4,76.8,80.2,83.0],
+['LASNet','ResNet152',99.46,77.75,86.48,82.8,83.43,84.4],
+['CM-SSM','EfficientViT-B1',null,80.5,85.4,85.7,78.1,85.9],
+R(['VesperMUSE LLIE','ResNet50/18',99.00,75.73,56.89,82.08,77.22,78.18],'var',{_noBest:1}),
+R(['VesperMUSE','ResNet50/18',99.46,82.82,83.36,87.76,74.56,85.59],'ours')];
+table('#t3',pstH,fm(pst),{skip:[1]});
+
+table('#t2',['Method','PST900 LL PSNR','SSIM','CART LL PSNR','SSIM','Params (M)'],[
+ ['LYT-Net','22.81','0.860','21.42','0.832','0.045'],['Retinexformer','26.60','0.850','27.11','0.847','1.61'],['ISALux','27.58','0.874','27.81','0.873','1.85'],
+ R(['VesperMUSE LLIE','27.47','0.870','27.74','0.858','0.454'],'ours')],{min:[5]});
+/* params best is LYT-Net but it trails by 5 dB: mark ours instead */
+{const c=$$('#t2 tbody tr');c.forEach(r=>r.lastElementChild.classList.remove('best'));c[3].lastElementChild.classList.add('best')}
+
+table('#t5',['Model','Backbone','FLOPs (G)','Params (M)','CART mIoU (%)'],[
+ ['SGFNet23','ResNet152','143.73','125.25','68.5'],['CMNeXt23','Mit-B2','68.70','58.68','72.1'],['CMX23','Mit-B2','67.20','66.57','74.0'],['CLNet-T24','Mit-B4','217.85','130.84','73.7'],
+ ['CAINet24','MobileNetV2','123.62','12.16','70.0'],['MCNet-T25','ConvNeXt-B','278.85','199.79','73.7'],['CM-SSM','EfficientViT-B1','10.34','12.59','74.6'],
+ R(['VesperMUSE','ResNet50 / ResNet18','321.28','180.45','76.7'],'ours')],{min:[2,3]});
+{const c=$$('#t5 tbody tr');c.forEach(r=>[2,3].forEach(j=>r.children[j].classList.remove('best')))}
+
+/* ---------- bar charts ---------- */
+function bars(id,data,max,min){const el=$(id);el.innerHTML=data.map((d,i)=>{const w=((d[1]-min)/(max-min)*100).toFixed(1);
+  return `<div class="bar ${d[2]||''}"><span>${d[0]}</span><div class="t"><i style="--w:${w}%;--d:${i*.06}s"></i></div><b>${d[1].toFixed(d[3]||2)}</b></div>`}).join('');
+  const ch=el.closest('.chart');const o=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){ch.classList.add('in');o.disconnect()}}),{threshold:.25});o.observe(ch)}
+bars('#b1',[['GMNet',72.7],['EGFNet',69.5],['EAEFNet',69.2],['CMNeXt',72.1],['CRM',71.4],['CAINet',70.0],['CLNet-T',73.7],['MCNet-T',73.7],['CMX',74.0],['CM-SSM',74.6],['VM LLIE',59.57,'var'],['VesperMUSE',76.72,'ours']],80,55);
+bars('#b2',[['EGFNet',78.51],['SA-Gate',79.05],['MMSMCNet',79.8],['CLNet-T',80.8],['DBCNet',81.8],['C4Net-Mit',82.6],['SGFNet',82.8],['MDNet',83.0],['LASNet',84.4],['CM-SSM',85.9],['VM LLIE',78.18,'var'],['VesperMUSE',85.59,'ours']],88,70);
+bars('#b3',[['Full · PST900',78.18,'ours'],['Concat · PST900',75.42],['Conv dec. · PST900',73.51],['Full · CART',59.57,'ours'],['Concat · CART',54.44],['Conv dec. · CART',53.20]],80,45);
+bars('#b4',[['RGB + T + N',78.18,'ours'],['RGB + T',74.53],['RGB + N',73.80],['Normals primary',67.70],['Thermal primary',60.60]],80,50);
+
+/* ---------- explorer ---------- */
+const inputs=[['rgb','Well-lit RGB'],['ll','Low-light'],['llie','Enhanced'],['thermal','Thermal'],['gt','Ground truth']];
+const preds=[['hafnet','HAFNet'],['crm','CRM-RGBTSeg'],['cainet','CAINet'],['eaefnet','EAEFNet'],['vm','VesperMUSE','ours'],['vmllie','VM LLIE']];
+const stage=$('#stage');let sc=1,md='rgb';
+const imgs={};
+for(let s=1;s<=5;s++)for(const [k] of [...inputs,...preds]){const im=new Image();im.src=`assets/seg/s${s}_${k}.jpg`;im.loading='lazy';imgs[`${s}_${k}`]=im;stage.appendChild(im)}
+function show(){for(const k in imgs)imgs[k].classList.toggle('on',k===`${sc}_${md}`);
+  const nm=[...inputs,...preds].find(x=>x[0]===md)[1];$('#slab').innerHTML=`Scene ${sc} · <span>${nm}</span>`;
+  $$('.chip').forEach(c=>c.classList.toggle('on',c.dataset.k===md))}
+$('#cin').innerHTML=inputs.map(x=>`<button class="chip" data-k="${x[0]}">${x[1]}</button>`).join('');
+$('#cpred').innerHTML=preds.map(x=>`<button class="chip ${x[2]||''}" data-k="${x[0]}">${x[1]}</button>`).join('');
+$$('.chip').forEach(c=>c.addEventListener('click',()=>{md=c.dataset.k;show()}));
+$('#scenes').innerHTML=[1,2,3,4,5].map(i=>`<button data-s="${i}" style="background-image:url(assets/seg/s${i}_rgb.jpg)"></button>`).join('');
+$$('#scenes button').forEach(b=>b.addEventListener('click',()=>{sc=+b.dataset.s;$$('#scenes button').forEach(x=>x.classList.toggle('on',x===b));show()}));
+$$('#scenes button')[0].classList.add('on');
+document.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;const all=[...inputs,...preds].map(x=>x[0]);if(stage.getBoundingClientRect().top>innerHeight||stage.getBoundingClientRect().bottom<0)return;
+  let i=all.indexOf(md)+(e.key==='ArrowRight'?1:-1);md=all[(i+all.length)%all.length];show()});
+show();
+
+/* ---------- copy ---------- */
+$('#copy').addEventListener('click',async e=>{const t=$('#cite').innerText.replace(/^Copy\s*/,'');try{await navigator.clipboard.writeText(t);e.target.textContent='Copied';setTimeout(()=>e.target.textContent='Copy',1600)}catch(_){}});
+})();
+</script>
+</body>
+</html>
